@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>helios_db ERD - Crow's Foot</title>
+    <style>
+        :root {
+            --bg: #f5f6fa;
+            --surface: #ffffff;
+            --border: #dce2ec;
+            --text: #1a1d2e;
+            --muted: #5f677a;
+            --accent: #1a7a4a;
+            --note: #fff8e6;
+            --note-border: #efd58a;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: Poppins, Inter, Arial, sans-serif;
+            line-height: 1.5;
+        }
+        header {
+            padding: 28px 34px 18px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+        }
+        h1 {
+            margin: 0 0 6px;
+            font-size: 24px;
+            line-height: 1.2;
+            letter-spacing: 0;
+        }
+        .subtitle {
+            color: var(--muted);
+            font-size: 13px;
+        }
+        .wrap {
+            padding: 24px 34px 40px;
+        }
+        .note {
+            max-width: 1180px;
+            margin: 0 0 18px;
+            padding: 13px 16px;
+            background: var(--note);
+            border: 1px solid var(--note-border);
+            border-radius: 8px;
+            color: #664b00;
+            font-size: 13px;
+        }
+        .diagram-shell {
+            width: 100%;
+            min-height: 720px;
+            overflow: auto;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .mermaid {
+            min-width: 1380px;
+        }
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 16px;
+            color: var(--muted);
+            font-size: 12px;
+        }
+        .legend span {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 999px;
+        }
+        code {
+            font-family: Consolas, "Courier New", monospace;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>helios_db Entity Relationship Diagram</h1>
+        <div class="subtitle">Crow's Foot notation generated from the current live database metadata.</div>
+    </header>
+
+    <main class="wrap">
+        <div class="note">
+            Note: <code>subject_members.username</code> is present in the table and part of its composite primary key, but the current database does not enforce it as a foreign key to <code>users.username</code>. This ERD shows enforced foreign-key relationships.
+        </div>
+        <section class="diagram-shell" aria-label="Crow's Foot ERD">
+            <pre class="mermaid">
+erDiagram
+    AUTHORIZED_PEOPLE {
+        varchar id PK
+        varchar firstname
+        varchar lastname
+        varchar email UK
+        varchar phonenumber
+        enum role
+        enum status
+        datetime created_at
+        datetime activated_at
+    }
+
+    USERS {
+        int id PK
+        varchar request_id UK
+        varchar authorized_person_id FK
+        varchar firstname
+        varchar lastname
+        varchar fullname
+        varchar phonenumber
+        varchar username UK
+        varchar email
+        varchar password
+        enum role
+        enum status
+        tinyint activation_request
+        datetime registered_at
+        datetime activated_at
+        tinyint must_change_password
+        int temp_password_expires_at
+        varchar disabled_reason
+        datetime disabled_at
+        varchar otp
+        int otp_expiry
+        varchar disabled_by
+        varchar enabled_by
+        datetime enabled_at
+        datetime password_changed_at
+    }
+
+    CLASSES {
+        varchar id PK
+        varchar name
+        varchar subject
+        text description
+        char code UK
+        varchar owner FK
+        enum status
+        datetime created_at
+    }
+
+    CLASS_MEMBERS {
+        varchar class_id PK, FK
+        varchar username PK, FK
+        datetime joined_at
+    }
+
+    SUBJECTS {
+        varchar id PK
+        varchar class_id FK
+        varchar name
+        varchar faculty
+        datetime created_at
+    }
+
+    SUBJECT_MEMBERS {
+        varchar subject_id PK, FK
+        varchar username PK
+        datetime joined_at
+    }
+
+    POSTS {
+        varchar id PK
+        varchar class_id FK
+        enum type
+        varchar title
+        text body
+        varchar link_url
+        varchar posted_by FK
+        datetime posted_at
+        datetime deadline
+        int points
+    }
+
+    POST_FILES {
+        int id PK
+        varchar post_id UK, FK
+        varchar orig_name
+        varchar stored_path
+        varchar ext
+        int size
+    }
+
+    COMMENTS {
+        varchar id PK
+        varchar post_id FK
+        varchar author FK
+        enum role
+        text body
+        datetime posted_at
+    }
+
+    SUBMISSIONS {
+        int id PK
+        varchar post_id FK
+        varchar student_username FK
+        text note
+        datetime submitted_at
+        decimal score
+        text score_note
+        datetime scored_at
+        varchar scored_by FK
+    }
+
+    SUBMISSION_FILES {
+        int id PK
+        int submission_id UK, FK
+        varchar orig_name
+        varchar stored_path
+        varchar ext
+        int size
+    }
+
+    CALENDAR_EVENTS {
+        int id PK
+        varchar title
+        text description
+        date event_date
+        time start_time
+        time end_time
+        varchar created_by FK
+        datetime created_at
+        int class_id
+    }
+
+    NOTIFICATIONS {
+        varchar id PK
+        varchar type
+        text message
+        datetime time
+        tinyint is_read
+    }
+
+    SYSTEM_SETTINGS {
+        varchar setting_key PK
+        text setting_value
+    }
+
+    AUTHORIZED_PEOPLE ||--o{ USERS : authorizes
+    USERS ||--o{ CALENDAR_EVENTS : creates
+    USERS ||--o{ CLASSES : owns
+    USERS ||--o{ CLASS_MEMBERS : joins
+    CLASSES ||--o{ CLASS_MEMBERS : includes
+    CLASSES ||--o{ SUBJECTS : contains
+    SUBJECTS ||--o{ SUBJECT_MEMBERS : enrolls
+    CLASSES ||--o{ POSTS : contains
+    USERS ||--o{ POSTS : publishes
+    POSTS ||--o| POST_FILES : attaches
+    POSTS ||--o{ COMMENTS : receives
+    USERS ||--o{ COMMENTS : writes
+    POSTS ||--o{ SUBMISSIONS : receives
+    USERS ||--o{ SUBMISSIONS : submits
+    USERS |o--o{ SUBMISSIONS : scores
+    SUBMISSIONS ||--o| SUBMISSION_FILES : attaches
+            </pre>
+        </section>
+
+        <div class="legend">
+            <span><code>PK</code> Primary key</span>
+            <span><code>FK</code> Foreign key</span>
+            <span><code>UK</code> Unique key</span>
+            <span><code>||</code> exactly one</span>
+            <span><code>o|</code> zero or one</span>
+            <span><code>o{</code> zero or many</span>
+        </div>
+    </main>
+
+    <script type="module">
+        import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: "base",
+            themeVariables: {
+                primaryColor: "#ffffff",
+                primaryBorderColor: "#1a7a4a",
+                primaryTextColor: "#1a1d2e",
+                lineColor: "#52576e",
+                fontFamily: "Poppins, Inter, Arial, sans-serif"
+            },
+            er: {
+                diagramPadding: 20,
+                layoutDirection: "LR",
+                minEntityWidth: 120,
+                minEntityHeight: 75,
+                entityPadding: 15,
+                stroke: "gray"
+            }
+        });
+    </script>
+</body>
+</html>
