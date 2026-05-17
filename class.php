@@ -2973,7 +2973,7 @@ if ($activePostId) {
                     <?php if ($role === 'faculty'): ?>
                     <button type="button" class="ls-add-task-btn" onclick="openCreatePostDialog('assignment')">
                         <svg><use href="#icon-add"></use></svg>
-                        Add task
+                        Add post
                     </button>
                     <?php endif; ?>
                 </div>
@@ -3400,7 +3400,7 @@ if ($activePostId) {
     <div class="modal-backdrop" id="dialogEditPost">
         <div class="dialog-surface">
             <header class="dialog-header">
-                <h2 class="dialog-title">Edit Task</h2>
+                <h2 class="dialog-title" id="editPostDialogTitle">Edit Post</h2>
                 <button class="btn-dialog-close" onclick="closeModal('dialogEditPost')"><svg><use href="#icon-close"></use></svg></button>
             </header>
             <form method="POST" enctype="multipart/form-data" id="editPostForm" style="display:flex; flex-direction:column; flex:1; min-height:0;">
@@ -3423,7 +3423,7 @@ if ($activePostId) {
                         <textarea class="md-input-field md-textarea" name="body" id="editPostBody" placeholder=" "></textarea>
                         <label class="md-input-label" for="editPostBody">Description (optional)</label>
                     </div>
-                    <div class="static-grid-row">
+                    <div class="static-grid-row" id="editAssignmentExtraFields">
                         <div class="static-input-wrap">
                             <label class="static-input-label">Points</label>
                             <input type="number" class="static-input-field" name="points" id="editPostPoints" value="100" min="0">
@@ -3439,7 +3439,7 @@ if ($activePostId) {
                         <input type="file" name="post_file" id="editPostFile" style="display:none;" onchange="validateFileState(this, 'editPostFileDisplay')">
                         <div class="upload-file-display" id="editPostFileDisplay">No file selected</div>
                     </label>
-                    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--gc-text-secondary);">
+                    <label id="editPostRemoveFileWrap" style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--gc-text-secondary);">
                         <input type="checkbox" name="remove_file" value="1" id="editPostRemoveFile">
                         Remove current attachment
                     </label>
@@ -3722,15 +3722,30 @@ if ($activePostId) {
     }
 
     function openEditPostDialog(post) {
+        const type = post.type || 'announcement';
+        const isAssignment = type === 'assignment';
+        const titleText = type === 'material'
+            ? 'Edit Material'
+            : (isAssignment ? 'Edit Assignment' : 'Edit Announcement');
+        const dialogTitle = document.getElementById('editPostDialogTitle');
+        const assignmentFields = document.getElementById('editAssignmentExtraFields');
+        const removeFileWrap = document.getElementById('editPostRemoveFileWrap');
+
         document.getElementById('editPostForm').reset();
         document.getElementById('editPostFileDisplay').textContent = post.file ? `Current: ${post.file.name}` : 'No file selected';
         document.getElementById('editPostId').value = post.id || '';
         document.getElementById('editPostTitle').value = post.title || '';
         document.getElementById('editPostBody').value = post.body || '';
-        document.getElementById('editPostPoints').value = post.points || 100;
-        document.getElementById('editPostDeadline').value = toDatetimeLocal(post.deadline || '');
         document.getElementById('editPostSubject').value = post.subject || '';
         document.getElementById('editPostRemoveFile').checked = false;
+
+        if (dialogTitle) dialogTitle.textContent = titleText;
+        if (assignmentFields) assignmentFields.style.display = isAssignment ? '' : 'none';
+        if (removeFileWrap) removeFileWrap.style.display = post.file ? 'flex' : 'none';
+
+        document.getElementById('editPostPoints').value = isAssignment ? (post.points || 100) : '';
+        document.getElementById('editPostDeadline').value = isAssignment ? toDatetimeLocal(post.deadline || '') : '';
+
         openDialog('dialogEditPost');
     }
 
