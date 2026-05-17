@@ -114,3 +114,4 @@ function heliosEnsureAcademicSchema(PDO $pdo): void {
 }
 
 heliosEnsureAcademicSchema($pdo);
+$pdo->exec("DELETE FROM calendar_events WHERE event_date < CURDATE()");

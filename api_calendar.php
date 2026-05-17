@@ -1,6 +1,6 @@
 <?php
 // api_calendar.php — Calendar Events API
-// Faculty: GET / POST (add) / DELETE
+// Faculty: GET / POST (add) / PUT (edit) / DELETE
 // Student: GET only
 
 session_start();
@@ -22,6 +22,7 @@ $method = $_SERVER['REQUEST_METHOD'];
 
 // ── GET: fetch events for a given year-month (or whole year) ──────────────
 if ($method === 'GET') {
+    $pdo->exec("DELETE FROM calendar_events WHERE event_date < CURDATE()");
     $year  = (int)($_GET['year']  ?? date('Y'));
     $month = isset($_GET['month']) ? (int)$_GET['month'] : null; // null = full year
 
@@ -31,10 +32,13 @@ if ($method === 'GET') {
 
         $stmt = $pdo->prepare(
             "SELECT e.id, e.title, e.description, e.event_date, e.class_id,
-                    e.created_by, c.name AS class_name
+                    e.start_time, e.end_time, e.created_by, c.name AS class_name,
+                    s.id AS subject_id
              FROM calendar_events e
              LEFT JOIN classes c ON c.id = e.class_id
+             LEFT JOIN subjects s ON s.class_id = e.class_id AND s.faculty = e.created_by
              WHERE e.event_date BETWEEN ? AND ?
+               AND e.event_date >= CURDATE()
              ORDER BY e.event_date ASC"
         );        $stmt->execute([$start, $end]);
     } else {
@@ -43,12 +47,62 @@ if ($method === 'GET') {
             "SELECT event_date, COUNT(*) AS cnt
              FROM calendar_events
              WHERE YEAR(event_date) = ?
+               AND event_date >= CURDATE()
              GROUP BY event_date"
         );
         $stmt->execute([$year]);
     }
 
     echo json_encode(['ok' => true, 'events' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+    exit();
+}
+
+if ($method === 'PUT' || $method === 'PATCH') {
+    $body = json_decode(file_get_contents('php://input'), true) ?? [];
+
+    $id          = (int)($body['id'] ?? 0);
+    $title       = trim($body['title']       ?? '');
+    $description = trim($body['description'] ?? '');
+    $eventDate   = trim($body['event_date']  ?? '');
+    $subjectId   = !empty($body['class_id']) ? $body['class_id'] : null;
+    $startTime   = !empty($body['start_time']) ? $body['start_time'] : null;
+    $endTime     = !empty($body['end_time'])   ? $body['end_time']   : null;
+
+    if (!$id || !$title || !$eventDate || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $eventDate)) {
+        http_response_code(422);
+        echo json_encode(['error' => 'Event id, title, and a valid event_date are required.']);
+        exit();
+    }
+
+    $classId = null;
+    if ($subjectId !== null) {
+        $check = $pdo->prepare("SELECT class_id FROM subjects WHERE id = ? AND faculty = ? LIMIT 1");
+        $check->execute([$subjectId, $username]);
+        $subjectRow = $check->fetch(PDO::FETCH_ASSOC);
+        if (!$subjectRow) {
+            http_response_code(403);
+            echo json_encode(['error' => 'You are not assigned to that subject.']);
+            exit();
+        }
+        $classId = $subjectRow['class_id'];
+    }
+
+    $exists = $pdo->prepare("SELECT id FROM calendar_events WHERE id = ? AND created_by = ?");
+    $exists->execute([$id, $username]);
+    if (!$exists->fetchColumn()) {
+        http_response_code(404);
+        echo json_encode(['error' => 'Event not found or not yours.']);
+        exit();
+    }
+
+    $upd = $pdo->prepare(
+        "UPDATE calendar_events
+            SET title = ?, description = ?, event_date = ?, start_time = ?, end_time = ?, class_id = ?
+          WHERE id = ? AND created_by = ?"
+    );
+    $upd->execute([$title, $description, $eventDate, $startTime, $endTime, $classId, $id, $username]);
+
+    echo json_encode(['ok' => true]);
     exit();
 }
 

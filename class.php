@@ -470,6 +470,66 @@ $this->resolveClassContext();
         $this->redirect('stream', 'post_deleted');
     }
 
+    private function executeUpdatePost(array $data, array $files): void {
+        global $pdo;
+        $postId = Sanitizer::string($data['post_id'] ?? '');
+        if (empty($postId)) return;
+
+        $ownerCheck = $pdo->prepare("SELECT * FROM posts WHERE id = ? AND class_id = ? AND posted_by = ?");
+        $ownerCheck->execute([$postId, $this->classId, $this->currentUsername]);
+        $existing = $ownerCheck->fetch(PDO::FETCH_ASSOC);
+        if (!$existing) {
+            $this->redirect('stream', 'error_update_denied');
+        }
+
+        $type = $existing['type'] ?? 'assignment';
+        $title = Sanitizer::string($data['title'] ?? '');
+        $body = trim($data['body'] ?? '');
+        $deadline = Sanitizer::date($data['deadline'] ?? null);
+        $points = Sanitizer::int($data['points'] ?? '100');
+        $subject = $this->resolveFacultySubject(Sanitizer::string($data['subject_id'] ?? ''));
+
+        if (!$subject || (empty($title) && empty($body))) {
+            $this->redirect('stream', 'error_invalid_post');
+        }
+
+        $deadline = ($type === 'assignment' && !empty($deadline)) ? $deadline : null;
+        $points = ($type === 'assignment' && $points > 0) ? $points : null;
+
+        $stmt = $pdo->prepare(
+            "UPDATE posts
+                SET title = ?, body = ?, subject = ?, deadline = ?, points = ?
+              WHERE id = ? AND class_id = ? AND posted_by = ?"
+        );
+        $stmt->execute([$title, $body, $subject['id'] ?? null, $deadline, $points, $postId, $this->classId, $this->currentUsername]);
+
+        if (!empty($data['remove_file'])) {
+            $pf = $pdo->prepare("SELECT stored_path FROM post_files WHERE post_id = ?");
+            $pf->execute([$postId]);
+            $storedPath = $pf->fetchColumn();
+            if ($storedPath) $this->fileHandler->removeFile((string)$storedPath);
+            $pdo->prepare("DELETE FROM post_files WHERE post_id = ?")->execute([$postId]);
+        }
+
+        if (isset($files['post_file']) && !empty($files['post_file']['name'])) {
+            $fileInfo = $this->fileHandler->processUpload($files['post_file'], SystemCore::DIR_UPLOADS);
+            if ($fileInfo) {
+                $pf = $pdo->prepare("SELECT stored_path FROM post_files WHERE post_id = ?");
+                $pf->execute([$postId]);
+                $storedPath = $pf->fetchColumn();
+                if ($storedPath) $this->fileHandler->removeFile((string)$storedPath);
+                $pdo->prepare("DELETE FROM post_files WHERE post_id = ?")->execute([$postId]);
+                $pdo->prepare(
+                    "INSERT INTO post_files (post_id, orig_name, stored_path, ext, size)
+                     VALUES (?, ?, ?, ?, ?)"
+                )->execute([$postId, $fileInfo['name'], $fileInfo['path'], $fileInfo['ext'], $fileInfo['size']]);
+            }
+        }
+
+        $_POST['_redirect_post'] = $postId;
+        $this->redirect('stream', 'post_updated');
+    }
+
     private function executeAddComment(string $postId, string $text): void {
         global $pdo;
         if (empty($postId) || empty(trim($text))) return;
@@ -612,6 +672,9 @@ $this->resolveClassContext();
                 break;
             case 'delete_post':
                 $this->executeDeletePost(Sanitizer::string($data['post_id'] ?? ''));
+                break;
+            case 'update_post':
+                $this->executeUpdatePost($data, $files);
                 break;
             case 'add_comment':
                 $this->executeAddComment(
@@ -2641,6 +2704,7 @@ if ($activePostId) {
                                     <input type="hidden" name="post_id" value="<?= htmlspecialchars($activePost['id']) ?>">
                                     <button type="submit" class="dropdown-item danger"><svg><use href="#icon-delete"></use></svg> Delete</button>
                                 </form>
+                                <button type="button" class="dropdown-item" onclick='event.stopPropagation(); openEditPostDialog(<?= json_encode($activePost, JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'><svg><use href="#icon-edit"></use></svg> Edit</button>
                             </div>
                         </div>
                         <?php endif; ?>
@@ -2972,6 +3036,7 @@ if ($activePostId) {
                                                 <input type="hidden" name="post_id" value="<?= htmlspecialchars($post['id']) ?>">
                                                 <button type="submit" class="dropdown-item danger"><svg><use href="#icon-delete"></use></svg> Delete</button>
                                             </form>
+                                            <button type="button" class="dropdown-item" onclick='event.stopPropagation(); openEditPostDialog(<?= json_encode($post, JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'><svg><use href="#icon-edit"></use></svg> Edit</button>
                                         </div>
                                     </div>
                                     <?php endif; ?>
@@ -3331,6 +3396,62 @@ if ($activePostId) {
         </div>
     </div>
 
+    <!-- Modal: Faculty Post Editor -->
+    <div class="modal-backdrop" id="dialogEditPost">
+        <div class="dialog-surface">
+            <header class="dialog-header">
+                <h2 class="dialog-title">Edit Task</h2>
+                <button class="btn-dialog-close" onclick="closeModal('dialogEditPost')"><svg><use href="#icon-close"></use></svg></button>
+            </header>
+            <form method="POST" enctype="multipart/form-data" id="editPostForm" style="display:flex; flex-direction:column; flex:1; min-height:0;">
+                <input type="hidden" name="action" value="update_post">
+                <input type="hidden" name="post_id" id="editPostId" value="">
+                <div class="dialog-content">
+                    <div class="static-input-wrap" style="margin-bottom:16px;">
+                        <label class="static-input-label">Subject</label>
+                        <select class="static-input-field" name="subject_id" id="editPostSubject" required>
+                            <?php foreach ($visibleClassSubjects as $subject): ?>
+                                <option value="<?= htmlspecialchars($subject['id'] ?? '') ?>"><?= htmlspecialchars($subject['name'] ?? 'Untitled subject') ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="md-input-container">
+                        <input type="text" class="md-input-field" name="title" id="editPostTitle" placeholder=" " required>
+                        <label class="md-input-label" for="editPostTitle">Title</label>
+                    </div>
+                    <div class="md-input-container">
+                        <textarea class="md-input-field md-textarea" name="body" id="editPostBody" placeholder=" "></textarea>
+                        <label class="md-input-label" for="editPostBody">Description (optional)</label>
+                    </div>
+                    <div class="static-grid-row">
+                        <div class="static-input-wrap">
+                            <label class="static-input-label">Points</label>
+                            <input type="number" class="static-input-field" name="points" id="editPostPoints" value="100" min="0">
+                        </div>
+                        <div class="static-input-wrap">
+                            <label class="static-input-label">Due Date</label>
+                            <input type="datetime-local" class="static-input-field" name="deadline" id="editPostDeadline">
+                        </div>
+                    </div>
+                    <label class="upload-dropzone" for="editPostFile" tabindex="0" role="button">
+                        <svg><use href="#icon-upload"></use></svg>
+                        <span class="upload-dropzone-text">Replace attached file</span>
+                        <input type="file" name="post_file" id="editPostFile" style="display:none;" onchange="validateFileState(this, 'editPostFileDisplay')">
+                        <div class="upload-file-display" id="editPostFileDisplay">No file selected</div>
+                    </label>
+                    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--gc-text-secondary);">
+                        <input type="checkbox" name="remove_file" value="1" id="editPostRemoveFile">
+                        Remove current attachment
+                    </label>
+                </div>
+                <footer class="dialog-actions">
+                    <button type="button" class="btn-text-action" onclick="closeModal('dialogEditPost')">Cancel</button>
+                    <button type="submit" class="btn-contained">Save changes</button>
+                </footer>
+            </form>
+        </div>
+    </div>
+
     <!-- Modal: Class Settings -->
     <div class="modal-backdrop" id="dialogSettings">
         <div class="dialog-surface">
@@ -3593,6 +3714,24 @@ if ($activePostId) {
         });
         
         openDialog('dialogCreatePost');
+    }
+
+    function toDatetimeLocal(value) {
+        if (!value) return '';
+        return String(value).replace(' ', 'T').slice(0, 16);
+    }
+
+    function openEditPostDialog(post) {
+        document.getElementById('editPostForm').reset();
+        document.getElementById('editPostFileDisplay').textContent = post.file ? `Current: ${post.file.name}` : 'No file selected';
+        document.getElementById('editPostId').value = post.id || '';
+        document.getElementById('editPostTitle').value = post.title || '';
+        document.getElementById('editPostBody').value = post.body || '';
+        document.getElementById('editPostPoints').value = post.points || 100;
+        document.getElementById('editPostDeadline').value = toDatetimeLocal(post.deadline || '');
+        document.getElementById('editPostSubject').value = post.subject || '';
+        document.getElementById('editPostRemoveFile').checked = false;
+        openDialog('dialogEditPost');
     }
 
     function updatePostTypeContext(type, targetEl) {

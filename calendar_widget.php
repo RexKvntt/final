@@ -20,10 +20,12 @@ $_calEnd   = date('Y-m-t', strtotime($_calStart));
 $_calStmt = $pdo->prepare(
     "SELECT e.id, e.title, e.description, e.event_date,
             e.start_time, e.end_time, e.created_by, e.class_id,
-            c.name AS class_name
+            c.name AS class_name, s.id AS subject_id
      FROM calendar_events e
      LEFT JOIN classes c ON c.id = e.class_id
+     LEFT JOIN subjects s ON s.class_id = e.class_id AND s.faculty = e.created_by
      WHERE e.event_date BETWEEN ? AND ?
+       AND e.event_date >= CURDATE()
      ORDER BY e.event_date ASC"
 );
 $_calStmt->execute([$_calStart, $_calEnd]);
@@ -122,6 +124,9 @@ $_widgetId      = 'cal_' . substr(md5($_calRole . $_calUser), 0, 6); // unique p
                     </div>
                 </div>
                 <?php if ($_ev['created_by'] === $_calUser): ?>
+                <button onclick='heliosCalEdit("<?= $_widgetId ?>", <?= json_encode($_ev, JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'
+                    title="Edit event"
+                    style="align-self:center;width:34px;height:24px;border-radius:999px;border:none;background:var(--gc-accent-blue-dim);color:var(--gc-accent-blue);cursor:pointer;font-size:10px;font-weight:700;display:grid;place-items:center;flex-shrink:0;">Edit</button>
                 <button onclick="heliosCalDelete('<?= $_widgetId ?>',<?= (int)$_ev['id'] ?>)"
                     title="Delete event"
                     style="align-self:center;width:24px;height:24px;border-radius:50%;border:none;background:var(--gc-accent-red-dim);color:var(--gc-accent-red);cursor:pointer;font-size:14px;display:grid;place-items:center;flex-shrink:0;">×</button>
@@ -144,7 +149,7 @@ $_widgetId      = 'cal_' . substr(md5($_calRole . $_calUser), 0, 6); // unique p
     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center;">
     <div style="background:var(--gc-bg-surface);border-radius:14px;padding:24px;width:100%;max-width:400px;margin:16px;box-shadow:0 24px 60px rgba(0,0,0,.3);display:flex;flex-direction:column;gap:12px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-            <span style="font-size:15px;font-weight:700;color:var(--helios-ink);">Schedule Event</span>
+            <span id="<?= $_widgetId ?>_formtitle" style="font-size:15px;font-weight:700;color:var(--helios-ink);">Schedule Event</span>
             <button onclick="heliosCalCloseForm('<?= $_widgetId ?>')"
                 style="width:28px;height:28px;border-radius:50%;border:none;background:var(--gc-bg-hover);color:var(--gc-text-secondary);cursor:pointer;font-size:16px;display:grid;place-items:center;">×</button>
         </div>
@@ -167,8 +172,10 @@ $_widgetId      = 'cal_' . substr(md5($_calRole . $_calUser), 0, 6); // unique p
             <option value="<?= htmlspecialchars($_cls['id']) ?>"><?= htmlspecialchars($_cls['name']) ?> (<?= htmlspecialchars($_cls['class_name']) ?>)</option>
             <?php endforeach; ?>
         </select>
+        <input id="<?= $_widgetId ?>_fid" type="hidden" value="">
         <div style="display:flex;gap:8px;">
             <button onclick="heliosCalAdd('<?= $_widgetId ?>')"
+                id="<?= $_widgetId ?>_fsave"
                 style="flex:1;padding:10px;border-radius:8px;border:none;background:var(--gc-accent-blue);color:#fff;font-family:'Poppins',sans-serif;font-size:13px;font-weight:600;cursor:pointer;">
                 Save Event
             </button>
@@ -398,6 +405,18 @@ function heliosCalShowDay(wid, date, events) {
 }
 
 function heliosCalOpenForm(wid) {
+    const id = document.getElementById(wid + '_fid');
+    if (id) id.value = '';
+    document.getElementById(wid + '_ftitle').value = '';
+    document.getElementById(wid + '_fdesc').value = '';
+    document.getElementById(wid + '_fstart').value = '';
+    document.getElementById(wid + '_fend').value = '';
+    document.getElementById(wid + '_fclass').value = '';
+    document.getElementById(wid + '_fdate').value = new Date().toISOString().slice(0, 10);
+    const heading = document.getElementById(wid + '_formtitle');
+    if (heading) heading.textContent = 'Schedule Event';
+    const save = document.getElementById(wid + '_fsave');
+    if (save) save.textContent = 'Save Event';
     const overlay = document.getElementById(wid + '_overlay');
     if (overlay) { overlay.style.display = 'flex'; }
 }
@@ -407,8 +426,25 @@ function heliosCalCloseForm(wid) {
     if (overlay) { overlay.style.display = 'none'; }
 }
 
+function heliosCalEdit(wid, ev) {
+    document.getElementById(wid + '_fid').value = ev.id || '';
+    document.getElementById(wid + '_ftitle').value = ev.title || '';
+    document.getElementById(wid + '_fdate').value = ev.event_date || '';
+    document.getElementById(wid + '_fdesc').value = ev.description || '';
+    document.getElementById(wid + '_fclass').value = ev.subject_id || '';
+    document.getElementById(wid + '_fstart').value = ev.start_time ? String(ev.start_time).slice(0,5) : '';
+    document.getElementById(wid + '_fend').value = ev.end_time ? String(ev.end_time).slice(0,5) : '';
+    const heading = document.getElementById(wid + '_formtitle');
+    if (heading) heading.textContent = 'Edit Event';
+    const save = document.getElementById(wid + '_fsave');
+    if (save) save.textContent = 'Update Event';
+    const overlay = document.getElementById(wid + '_overlay');
+    if (overlay) overlay.style.display = 'flex';
+}
+
 // Add event (faculty)
 function heliosCalAdd(wid) {
+    const id    = document.getElementById(wid + '_fid').value;
     const title = document.getElementById(wid + '_ftitle').value.trim();
     const date  = document.getElementById(wid + '_fdate').value;
     const desc  = document.getElementById(wid + '_fdesc').value.trim();
@@ -425,9 +461,9 @@ function heliosCalAdd(wid) {
     msg.style.display = 'none';
 
     fetch('api_calendar.php', {
-        method: 'POST',
+        method: id ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, description: desc, event_date: date, class_id: cls || null, start_time: start || null, end_time: end || null })
+        body: JSON.stringify({ id, title, description: desc, event_date: date, class_id: cls || null, start_time: start || null, end_time: end || null })
     })
     .then(r => r.json())
     .then(data => {
@@ -439,6 +475,7 @@ function heliosCalAdd(wid) {
         // Reset form & close modal & reload month
         document.getElementById(wid + '_ftitle').value = '';
         document.getElementById(wid + '_fdesc').value  = '';
+        document.getElementById(wid + '_fid').value = '';
         heliosCalCloseForm(wid);
         heliosCal(wid, 0);
     })

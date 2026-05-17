@@ -21,15 +21,31 @@ if ($role === 'admin') {
 
 $usernameRaw = $_SESSION['username'];
 $username    = htmlspecialchars($usernameRaw);
-$initials    = strtoupper(substr($usernameRaw, 0, 2));
 
 require_once __DIR__ . '/db.php';
+
+function heliosInitials(string $name): string {
+    $parts = preg_split('/\s+/', trim($name));
+    $letters = '';
+    foreach ($parts as $part) {
+        if ($part !== '') $letters .= strtoupper(substr($part, 0, 1));
+        if (strlen($letters) >= 2) break;
+    }
+    return $letters !== '' ? $letters : '?';
+}
+
+$allUserRows = $pdo->query("SELECT username, fullname, role, status FROM users ORDER BY fullname ASC")->fetchAll(PDO::FETCH_ASSOC);
+$nameMap = [];
+foreach ($allUserRows as $userRow) {
+    $nameMap[$userRow['username']] = $userRow['fullname'] ?? $userRow['username'];
+}
 
 // Load current user display name
 $stmtMe = $pdo->prepare("SELECT firstname, lastname, fullname, role FROM users WHERE username = ?");
 $stmtMe->execute([$usernameRaw]);
 $meRow = $stmtMe->fetch();
 $displayName = $meRow['fullname'] ?? $usernameRaw;
+$initials = heliosInitials($displayName);
 
 // Load classes based on role
 $myClasses = [];
@@ -63,6 +79,18 @@ foreach ($myClasses as &$cls) {
     $stmtS = $pdo->prepare("SELECT * FROM subjects WHERE class_id = ?");
     $stmtS->execute([$cls['id']]);
     $cls['subjects'] = $stmtS->fetchAll();
+    foreach ($cls['subjects'] as &$subject) {
+        $stmtSM = $pdo->prepare("SELECT username FROM subject_members WHERE subject_id = ?");
+        $stmtSM->execute([$subject['id']]);
+        $subject['students'] = array_column($stmtSM->fetchAll(), 'username');
+    }
+    unset($subject);
+    if ($role === 'student') {
+        $cls['subjects'] = array_values(array_filter(
+            $cls['subjects'],
+            fn($subject) => in_array($usernameRaw, $subject['students'] ?? [], true)
+        ));
+    }
 
     // Get members (students) for this class
     $stmtM = $pdo->prepare("SELECT username FROM class_members WHERE class_id = ?");
@@ -279,7 +307,6 @@ $subjectCounterSeed  = 0;
         .gc-card-title a { color: inherit; }
         .gc-card-title a:hover { text-decoration: underline; }
         .gc-card-subtitle { font-size: 14px; color: var(--gc-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .gc-card-faculty { font-size: 13px; color: var(--gc-text-secondary); margin-top: 12px; display: flex; align-items: center; gap: 6px; }
 
         .gc-card-menu-btn { position: absolute; top: 16px; right: 16px; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--gc-text-secondary); transition: background-color var(--transition-standard); }
         .gc-card-menu-btn:hover { background-color: rgba(0,0,0,.04); }
@@ -1139,7 +1166,6 @@ $subjectCounterSeed  = 0;
         .student-main-panel .gc-card-footer { display: flex; padding: 10px 22px; }
         .student-main-panel .gc-card-title { font-size: 16px; font-weight: 600; white-space: normal; padding-right: 28px; }
         .student-main-panel .gc-card-subtitle { font-size: 12px; margin-top: 3px; }
-        .student-main-panel .gc-card-faculty { font-size: 12px; margin-top: 8px; }
         /* Color-coded top accents per card position */
         .student-main-panel .gc-card:nth-child(4n+1) .gc-card-top-accent { background: #1a7a4a; }
         .student-main-panel .gc-card:nth-child(4n+2) .gc-card-top-accent { background: #3f70b8; }
@@ -1172,10 +1198,14 @@ $subjectCounterSeed  = 0;
             width: 96px; height: 96px; border-radius: 50%;
             margin: 0 auto 14px;
             display: grid; place-items: center;
-            background: linear-gradient(135deg, #dfe7fb, #f4c6d2);
-            color: var(--helios-brand-deep);
+            background: #cfa56e;
+            color: #2f1d0b;
             font-size: 34px;
             font-weight: 800;
+        }
+        [data-theme="dark"] .student-profile-avatar {
+            background: #6f4a1f;
+            color: #fff3dd;
         }
         .student-profile-card h3 { font-size: 15px; color: var(--helios-ink); }
         .student-profile-card p { font-size: 12px; color: var(--helios-muted); margin-top: 2px; }
@@ -1266,7 +1296,6 @@ $subjectCounterSeed  = 0;
         .gc-card-subtitle,
         .gc-task-title,
         .gc-upcoming-label { color: var(--helios-ink); }
-        .gc-card-faculty,
         .gc-task-due,
         .gc-empty-tasks { color: var(--helios-muted); }
         .gc-task-item { border-radius: 8px; padding: 8px; margin: 0 -8px; transition: background var(--transition-standard), transform var(--transition-standard); }
@@ -1455,7 +1484,7 @@ $subjectCounterSeed  = 0;
     <symbol id="icon-search"      viewBox="0 0 24 24"><path d="M9.5 3a6.5 6.5 0 0 1 5.16 10.45l4.45 4.44-1.42 1.42-4.44-4.45A6.5 6.5 0 1 1 9.5 3zm0 2a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9z"/></symbol>
     <symbol id="icon-bell"        viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></symbol>
     <symbol id="icon-person"      viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></symbol>
-    <symbol id="icon-grade"       viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></symbol>
+    <symbol id="icon-grade"       viewBox="0 0 24 24"><path d="M5 3.5A2.5 2.5 0 0 1 7.5 1H19v18H7.5A2.5 2.5 0 0 0 5 21.5v-18zM7.5 3A.5.5 0 0 0 7 3.5v14.55c.17-.03.33-.05.5-.05H17V3H7.5zM8.5 6h7v2h-7V6zm0 4h7v2h-7v-2z"/></symbol>
     <symbol id="icon-close"       viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></symbol>
     <symbol id="icon-book"        viewBox="0 0 24 24"><path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z"/></symbol>
     <symbol id="icon-edit"        viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></symbol>
@@ -1737,23 +1766,30 @@ $subjectCounterSeed  = 0;
                         </h2>
                         <div class="gc-card-subtitle"><?= htmlspecialchars($classSection) ?></div>
 
-                        <?php if ($role === 'student'): ?>
-                        <div class="gc-card-faculty">
-                            <svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:currentColor;flex-shrink:0;"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg>
-                            <?= htmlspecialchars($cls['_faculty_display'] ?? 'Professor') ?>
+                        <div class="subject-pill-row" style="margin-top:10px;">
+                            <?php if (!empty($classSubjects)): ?>
+                                <?php foreach (array_slice($classSubjects, 0, 3) as $subj): ?>
+                                <button class="subject-pill"
+                                        onclick="openSubjectDrawer('<?= htmlspecialchars(addslashes($cls['id'])) ?>', '<?= htmlspecialchars(addslashes($subj['id'])) ?>')"
+                                        title="<?= htmlspecialchars($subj['name']) ?>">
+                                    <svg><use href="#icon-book"></use></svg>
+                                    <?= htmlspecialchars($subj['name']) ?>
+                                </button>
+                                <?php endforeach; ?>
+                                <?php if (count($classSubjects) > 3): ?>
+                                <button class="subject-pill" onclick="openSubjectDrawer('<?= htmlspecialchars(addslashes($cls['id'])) ?>', null)">
+                                    +<?= count($classSubjects) - 3 ?> more
+                                </button>
+                                <?php endif; ?>
+                            <?php else: ?>
+                                <button class="subject-pill"
+                                        onclick="openSubjectDrawer('<?= htmlspecialchars(addslashes($cls['id'])) ?>', null)"
+                                        style="color:var(--gc-text-tertiary);">
+                                    <svg><use href="#icon-book"></use></svg>
+                                    <?= $role === 'faculty' ? 'No subjects assigned' : 'No subjects yet' ?>
+                                </button>
+                            <?php endif; ?>
                         </div>
-                        <?php elseif ($role === 'faculty'): ?>
-                        <div class="gc-card-faculty" style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;">
-                            <span style="display:flex;align-items:center;gap:5px;">
-                                <svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:currentColor;"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
-                                <?= count($cls['members'] ?? []) ?> enrolled
-                            </span>
-                            <span style="display:flex;align-items:center;gap:5px;">
-                                <svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:currentColor;"><path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM9 4h2v5l-1-.75L9 9V4zm9 16H6V4h1v9l3-2.25L13 13V4h5v16z"/></svg>
-                                <?= count($cls['subjects'] ?? []) ?> subject<?= count($cls['subjects'] ?? []) !== 1 ? 's' : '' ?>
-                            </span>
-                        </div>
-                        <?php endif; ?>
 
                         <button class="gc-card-menu-btn" aria-label="Class options">
                             <svg><use href="#icon-more-vert"></use></svg>
@@ -1782,7 +1818,7 @@ $subjectCounterSeed  = 0;
                     <!-- Card Footer — subjects pills + actions -->
                     <div class="gc-card-footer">
                         <!-- Subject pills (clickable → opens drawer) -->
-                        <div class="subject-pill-row">
+                        <div style="display:none;">
                             <?php if (!empty($classSubjects)): ?>
                                 <?php foreach (array_slice($classSubjects, 0, 3) as $subj): ?>
                                 <button class="subject-pill"
@@ -1822,9 +1858,6 @@ $subjectCounterSeed  = 0;
                                 <svg><use href="#icon-grade"></use></svg>
                             </a>
                             <?php endif; ?>
-                            <a href="folder.php?class=<?= urlencode($cls['id']) ?>" class="gc-footer-icon" title="Drive folder">
-                                <svg><use href="#icon-folder"></use></svg>
-                            </a>
                         </div>
                     </div>
                 </div>
@@ -1836,37 +1869,6 @@ $subjectCounterSeed  = 0;
             <?php endif; ?>
 
             <?php if ($role === 'student'): ?>
-                    <div class="student-section-bar">
-                        <h2>Lessons</h2>
-                        <span>View All</span>
-                    </div>
-                    <div class="student-lessons-scroll">
-                        <table class="student-lessons-table">
-                            <thead>
-                                <tr>
-                                    <th>Class</th>
-                                    <th>Teacher Name</th>
-                                    <th>Starting</th>
-                                    <th>Material</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach (array_slice($studentExtras, 0, 5) as $i => $task): ?>
-                                <tr>
-                                    <td><?= htmlspecialchars($task['subject'] ?? 'A1') ?></td>
-                                    <td><?= htmlspecialchars($task['created_by'] ?? 'Teacher') ?></td>
-                                    <td><?= !empty($task['due_date']) ? htmlspecialchars(date('m.d.Y', strtotime($task['due_date']))) : 'TBA' ?></td>
-                                    <td><a href="#">Download</a></td>
-                                    <td><span class="student-status-dot <?= $i % 2 ? 'pending' : '' ?>"><?= $i % 2 ? 'Pending' : 'Done' ?></span></td>
-                                </tr>
-                                <?php endforeach; ?>
-                                <?php if (empty($studentExtras)): ?>
-                                <tr><td colspan="5">No lessons are available yet.</td></tr>
-                                <?php endif; ?>
-                            </tbody>
-                        </table>
-                    </div>
                 </div>
                 <aside class="student-side-panel" aria-label="Student profile and reminders">
                     <div class="student-profile-card">
@@ -2016,7 +2018,7 @@ $subjectCounterSeed  = 0;
 <script>
 const ROLE         = <?= json_encode($role) ?>;
 const USERNAME     = <?= json_encode($usernameRaw) ?>;
-const NAME_MAP     = {};
+const NAME_MAP     = <?= json_encode($nameMap) ?>;
 const ALL_FACULTY  = [];
 const ALL_STUDENTS = [];
 
