@@ -100,8 +100,8 @@ if ($channel === 'email') {
         $mail->isSMTP();
         $mail->Host       = 'smtp.gmail.com';
         $mail->SMTPAuth   = true;
-        $mail->Username   = 'email@gmail.com'; // replace with your Gmail
-        $mail->Password   = 'secret_app_password';
+        $mail->Username   = 'helios.univv@gmail.com';
+        $mail->Password   = 'dthxdmkrcdrjfbna';
         $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
         $mail->Port       = 587;
 
@@ -109,37 +109,45 @@ if ($channel === 'email') {
         $decryptedEmail = decryptData($targetUser['email']);
         $mail->addAddress($decryptedEmail);
 
-        $mail->Subject = "Sign-in Verification Code — $otp";
+        $mail->Subject = "Sign-in Verification Code - $otp";
         $mail->isHTML(true);
-        $mail->Body = '
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <style>
-                @import url("https://fonts.googleapis.com/css2?family=Sora:wght@400;700;800&display=swap");
-            </style>
-        </head>
-        <body style="font-family:\'Sora\', sans-serif; background-color:#f8fafc; padding:60px 20px; margin:0;">
-            <div style="max-width:520px; background-color:#ffffff; border-radius:28px; padding:48px; margin:auto; box-shadow:0 20px 40px rgba(15,23,42,0.06); border:1px solid #e2e8f0;">
-                <div style="font-size:24px; font-weight:800; color:#1e40af; letter-spacing:-0.04em; margin-bottom:32px;">' . $orgName . '</div>
-                <h1 style="font-size:28px; font-weight:800; color:#0f172a; margin:0 0 12px 0; letter-spacing:-0.02em;">Verify your identity</h1>
-                <p style="font-size:16px; color:#64748b; line-height:1.6; margin:0;">A sign-in attempt requires verification. Use the code below to continue.</p>
-                <div style="background-color:#f1f5f9; border-radius:20px; padding:40px 20px; text-align:center; margin:32px 0; border:1px solid #e2e8f0;">
-                    <div style="font-size:11px; font-weight:800; color:#94a3b8; text-transform:uppercase; letter-spacing:0.15em; margin-bottom:12px;">Security Code</div>
-                    <div style="font-size:48px; font-weight:800; color:#1e40af; letter-spacing:12px;">' . $otp . '</div>
-                </div>
-                <div style="border-top:1px solid #f1f5f9; padding-top:24px;">
-                    <p style="font-size:13px; color:#94a3b8; margin:0;">
-                        Requested on <strong>' . $date . '</strong> at <strong>' . $time . '</strong><br>
-                        This code expires in <strong>5 minutes.</strong>
-                    </p>
-                </div>
-            </div>
-            <div style="text-align:center; margin-top:32px;">
-                <p style="font-size:12px; color:#cbd5e1;">&copy; ' . date('Y') . ' ' . $orgName . ' Academic Hub</p>
-            </div>
-        </body>
-        </html>';
+    $mail->Body = <<<HTML
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>OreXis OTP Code</title>
+</head>
+<body style="margin:0;padding:0;background-color:#07111f;font-family:Arial,sans-serif;color:#f5f8ff;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:linear-gradient(145deg,#07111f 0%,#12233b 100%);padding:32px 16px;">
+        <tr>
+            <td align="center">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;background:linear-gradient(160deg,rgba(38,48,72,0.96),rgba(18,34,57,0.98));border:1px solid #2d4668;border-radius:28px;overflow:hidden;">
+                    <tr>
+                        <td style="padding:32px 36px;background:linear-gradient(135deg,#0d1c33 0%,#163356 100%);border-bottom:1px solid #2d4668;text-align:center;">
+                            <div style="font-size:12px;letter-spacing:0.32em;text-transform:uppercase;color:#8ecfff;margin-bottom:10px;">Security Verification</div>
+                            <div style="font-size:32px;font-weight:700;line-height:1.1;color:#ffffff;">Ore<span style="color:#53d2ff;">Xis</span></div>
+                            <div style="margin-top:10px;font-size:15px;line-height:1.7;color:#c7d5ef;">Use the one-time password below to finish signing in to your account.</div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:32px 36px;text-align:center;">
+                            <div style="font-size:14px;line-height:1.7;color:#c7d5ef;margin-bottom:20px;text-align:center;">Your verification code is valid for 5 minutes.</div>
+                            <div style="display:inline-block;padding:0;color:#ffffff;font-size:32px;font-weight:700;letter-spacing:0.28em;text-align:center;">
+                                {$otp}
+                            </div>
+                            <div style="margin-top:24px;font-size:13px;line-height:1.7;color:#9fb2cf;">
+                                If you did not try to sign in, you can safely ignore this email.
+                            </div>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
+HTML;
         $mail->AltBody = "Your $orgName verification code is: $otp. It expires in 5 minutes.";
 
         $mail->send();
