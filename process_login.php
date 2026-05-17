@@ -55,6 +55,11 @@ if (!in_array($inputRole, ['student', 'faculty', 'admin'], true)) {
     exit();
 }
 
+if ($inputRole !== 'admin' && isSettingEnabled($config['maintenance'] ?? '0')) {
+    renderSystemMaintenancePage($config);
+    exit();
+}
+
 /* ── 3. FETCH USER FROM DATABASE ────────────────────────────
    Matches on username (YYYY-XXXX permanent ID).
    Previously looped through users.json — now a single query.

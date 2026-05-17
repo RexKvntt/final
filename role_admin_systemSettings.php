@@ -26,20 +26,35 @@ foreach ($configStmt->fetchAll() as $row) {
 
 /* ── Handle Save Process ── */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_settings'])) {
+    $maintenanceEnabled = isset($_POST['maintenance']);
+    $maintenanceDuration = min(2880, max(1, (int)trim($_POST['m_duration'] ?? '60')));
+    $maintenanceWork = trim($_POST['m_work'] ?? '');
+    $maintenanceChanged = $maintenanceEnabled
+        && (
+            (string)($config['maintenance'] ?? '0') !== '1'
+            || (string)($config['m_duration'] ?? '') !== (string)$maintenanceDuration
+            || (string)($config['m_work'] ?? '') !== $maintenanceWork
+        );
+
     $settings = [
         'org_name'    => trim($_POST['org_name'] ?? ''),
         'sys_email'   => trim($_POST['sys_email'] ?? ''),
         'allow_reg'   => isset($_POST['allow_reg'])   ? '1' : '0',
-        'maintenance' => isset($_POST['maintenance'])  ? '1' : '0',
-        'm_duration'  => trim($_POST['m_duration'] ?? '60'),
-        'm_work'      => trim($_POST['m_work'] ?? ''),
+        'maintenance' => $maintenanceEnabled ? '1' : '0',
+        'm_duration'  => (string)$maintenanceDuration,
+        'm_work'      => $maintenanceWork,
         'enforce_otp' => isset($_POST['enforce_otp']) ? '1' : '0',
+        'm_started_at'=> $maintenanceChanged ? (string)time() : (string)($config['m_started_at'] ?? time()),
         'last_updated'=> date('Y-m-d H:i:s'),
     ];
 
-    $stmt = $pdo->prepare("UPDATE system_settings SET setting_value = ? WHERE setting_key = ?");
+    $stmt = $pdo->prepare("
+        INSERT INTO system_settings (setting_key, setting_value)
+        VALUES (?, ?)
+        ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)
+    ");
     foreach ($settings as $key => $value) {
-        $stmt->execute([$value, $key]);
+        $stmt->execute([$key, $value]);
     }
 
     // Update local $config so the page reflects new values immediately
@@ -800,7 +815,7 @@ $totalClasses = (int)$totalClassesStmt->fetchColumn();
                             <span class="setting-label">Duration (Minutes)</span>
                             <span class="setting-desc">Countdown timer shown to users during maintenance.</span>
                         </div>
-                        <input type="number" class="config-input" name="m_duration" value="<?= htmlspecialchars($config['m_duration'] ?? '60') ?>">
+                        <input type="number" class="config-input" name="m_duration" min="1" max="2880" value="<?= htmlspecialchars($config['m_duration'] ?? '60') ?>">
                     </div>
                     <div class="setting-row">
                         <div class="setting-info">

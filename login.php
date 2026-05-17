@@ -5,6 +5,7 @@
 session_start();
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
+require_once __DIR__ . '/auth_helpers.php';
 
 class AuthSystem {
     private $configFile;
@@ -31,6 +32,7 @@ class AuthSystem {
         } else {
             $this->config = $defaultConfig;
         }
+        $this->config = loadSystemSettings($this->config);
     }
 
     private function defineErrors() {
@@ -58,6 +60,9 @@ class AuthSystem {
     }
 
     private function renderMaintenancePage() {
+        renderSystemMaintenancePage($this->config);
+        return;
+
         $orgName         = htmlspecialchars($this->getConfig('org_name'));
         $mWork           = htmlspecialchars($this->getConfig('m_work'));
         $startTime       = (int)$this->getConfig('m_start_time');

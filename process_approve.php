@@ -127,8 +127,8 @@ try {
     $mail->isSMTP();
     $mail->Host       = 'smtp.gmail.com';           // or your SMTP host
     $mail->SMTPAuth   = true;
-    $mail->Username   = 'secret';     // sender email
-    $mail->Password   = 'secret';        // Gmail App Password
+    $mail->Username   = 'secretngani';     // sender email
+    $mail->Password   = 'pakekosayo';        // Gmail App Password
     $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
     $mail->Port       = 587;
 

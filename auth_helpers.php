@@ -130,10 +130,66 @@ function enforceTemporaryPasswordDeadline(): void
         return;
     }
 
+    enforceSystemMaintenanceGate();
+
     if (disableExpiredTemporaryPasswordAccount($_SESSION['username'])) {
         session_unset();
         session_destroy();
         header('Location: disabled_account.php?reason=password_expired');
+        exit();
+    }
+}
+
+function loadSystemSettings(array $defaults = []): array
+{
+    $config = array_merge([
+        'org_name' => 'Helios University',
+        'maintenance' => '0',
+        'm_duration' => '60',
+        'm_work' => 'General updates and system improvements',
+        'm_started_at' => (string)time(),
+    ], $defaults);
+
+    try {
+        global $pdo;
+        if (!isset($pdo) || !$pdo instanceof PDO) {
+            require_once __DIR__ . '/db.php';
+            $GLOBALS['pdo'] = $pdo;
+        }
+        $configStmt = $pdo->query("SELECT setting_key, setting_value FROM system_settings");
+        foreach ($configStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $config[$row['setting_key']] = $row['setting_value'];
+        }
+    } catch (Throwable $e) {
+        error_log('loadSystemSettings failed: ' . $e->getMessage());
+    }
+
+    return $config;
+}
+
+function isSettingEnabled($value): bool
+{
+    return in_array($value, [true, 1, '1', 'true', 'on', 'yes'], true);
+}
+
+function renderSystemMaintenancePage(array $config): void
+{
+    $__org = $config['org_name'] ?? 'Helios University';
+    $__work = $config['m_work'] ?? 'General updates and system improvements';
+    $__dur = (int)($config['m_duration'] ?? 60);
+    $__startedAt = (int)($config['m_started_at'] ?? time());
+    require __DIR__ . '/maintenance_page.php';
+}
+
+function enforceSystemMaintenanceGate(): void
+{
+    if (($_SESSION['role'] ?? '') === 'admin') {
+        return;
+    }
+
+    $config = loadSystemSettings();
+    if (isSettingEnabled($config['maintenance'] ?? '0')) {
+        renderSystemMaintenancePage($config);
         exit();
     }
 }
@@ -143,7 +199,7 @@ function sendCredentialsEmail(string $recipientEmail, string $recipientName, str
     require_once __DIR__ . '/vendor/autoload.php';
 
     // ── SMTP credentials ───────────────────────────────────────────────────
-    $smtpUser = 'secret';      // <- replace with your Gmail
+    $smtpUser = 'mamamo';      // <- replace with your Gmail
     $smtpPass = 'secret';          // <- replace with your 16-char App Password
     $orgName  = 'Helios University';
 
@@ -176,7 +232,7 @@ function sendCredentialsEmail(string $recipientEmail, string $recipientName, str
             . "Unique ID / Username: {$uniqueId}\n"
             . "Temporary Password: {$temporaryPassword}\n\n"
             . "This temporary password expires in 3 days.\n"
-            . "Please sign in and change it immediately in Account Settings.\n\n"
+            . "Please sign in and change it immediately in Account Settings, otherwise your account may be deactivated for security reasons.\n\n"
             . "— {$orgName}";
 
         return $mail->send();

@@ -1767,28 +1767,13 @@ $subjectCounterSeed  = 0;
                         <div class="gc-card-subtitle"><?= htmlspecialchars($classSection) ?></div>
 
                         <div class="subject-pill-row" style="margin-top:10px;">
-                            <?php if (!empty($classSubjects)): ?>
-                                <?php foreach (array_slice($classSubjects, 0, 3) as $subj): ?>
-                                <button class="subject-pill"
-                                        onclick="openSubjectDrawer('<?= htmlspecialchars(addslashes($cls['id'])) ?>', '<?= htmlspecialchars(addslashes($subj['id'])) ?>')"
-                                        title="<?= htmlspecialchars($subj['name']) ?>">
-                                    <svg><use href="#icon-book"></use></svg>
-                                    <?= htmlspecialchars($subj['name']) ?>
-                                </button>
-                                <?php endforeach; ?>
-                                <?php if (count($classSubjects) > 3): ?>
-                                <button class="subject-pill" onclick="openSubjectDrawer('<?= htmlspecialchars(addslashes($cls['id'])) ?>', null)">
-                                    +<?= count($classSubjects) - 3 ?> more
-                                </button>
-                                <?php endif; ?>
-                            <?php else: ?>
-                                <button class="subject-pill"
-                                        onclick="openSubjectDrawer('<?= htmlspecialchars(addslashes($cls['id'])) ?>', null)"
-                                        style="color:var(--gc-text-tertiary);">
-                                    <svg><use href="#icon-book"></use></svg>
-                                    <?= $role === 'faculty' ? 'No subjects assigned' : 'No subjects yet' ?>
-                                </button>
-                            <?php endif; ?>
+                            <?php $subjectCount = count($classSubjects); ?>
+                            <button class="subject-pill"
+                                    onclick="openSubjectDrawer('<?= htmlspecialchars(addslashes($cls['id'])) ?>', null)"
+                                    title="View class subjects">
+                                <svg><use href="#icon-book"></use></svg>
+                                <?= $subjectCount ?> subject<?= $subjectCount === 1 ? '' : 's' ?>
+                            </button>
                         </div>
 
                         <button class="gc-card-menu-btn" aria-label="Class options">
@@ -1817,33 +1802,7 @@ $subjectCounterSeed  = 0;
 
                     <!-- Card Footer — subjects pills + actions -->
                     <div class="gc-card-footer">
-                        <!-- Subject pills (clickable → opens drawer) -->
-                        <div style="display:none;">
-                            <?php if (!empty($classSubjects)): ?>
-                                <?php foreach (array_slice($classSubjects, 0, 3) as $subj): ?>
-                                <button class="subject-pill"
-                                        onclick="openSubjectDrawer('<?= htmlspecialchars(addslashes($cls['id'])) ?>', '<?= htmlspecialchars(addslashes($subj['id'])) ?>')"
-                                        title="<?= htmlspecialchars($subj['name']) ?>">
-                                    <svg><use href="#icon-book"></use></svg>
-                                    <?= htmlspecialchars($subj['name']) ?>
-                                </button>
-                                <?php endforeach; ?>
-                                <?php if (count($classSubjects) > 3): ?>
-                                <button class="subject-pill" onclick="openSubjectDrawer('<?= htmlspecialchars(addslashes($cls['id'])) ?>', null)">
-                                    +<?= count($classSubjects) - 3 ?> more
-                                </button>
-                                <?php endif; ?>
-                            <?php else: ?>
-                                <button class="subject-pill"
-                                        onclick="openSubjectDrawer('<?= htmlspecialchars(addslashes($cls['id'])) ?>', null)"
-                                        style="color:var(--gc-text-tertiary);">
-                                    <svg><use href="#icon-book"></use></svg>
-                                    <?= $role === 'faculty' ? 'No subjects assigned' : 'No subjects yet' ?>
-                                </button>
-                            <?php endif; ?>
-                        </div>
-
-                        <!-- Right-side icons -->
+<!-- Right-side icons -->
                         <div class="gc-footer-right">
                             <a href="class.php?id=<?= urlencode($cls['id']) ?>" class="gc-card-goto" title="Open class">
                                 Open
@@ -2356,23 +2315,11 @@ function refreshCardPills(cId) {
         const pillRow = card.querySelector('.subject-pill-row');
         if (!pillRow) return;
         const subjects = cls.subjects || [];
-        if (subjects.length === 0) {
-            pillRow.innerHTML = `<button class="subject-pill" onclick="openSubjectDrawer('${esc(cId)}',null)" style="color:var(--gc-text-tertiary);">
-                <svg style="width:11px;height:11px;fill:currentColor;"><use href="#icon-book"></use></svg>
-                ${ROLE==='faculty'?'No subjects assigned':'No subjects yet'}
-            </button>`;
-            return;
-        }
-        const visible = subjects.slice(0,3);
-        const extra   = subjects.length - visible.length;
-        pillRow.innerHTML = visible.map(s =>
-            `<button class="subject-pill" onclick="openSubjectDrawer('${esc(cId)}','${esc(s.id)}')" title="${esc(s.name)}">
-                <svg style="width:11px;height:11px;fill:currentColor;"><use href="#icon-book"></use></svg>
-                ${esc(s.name)}
-             </button>`
-        ).join('') + (extra > 0
-            ? `<button class="subject-pill" onclick="openSubjectDrawer('${esc(cId)}',null)">+${extra} more</button>`
-            : '');
+        const count = subjects.length;
+        pillRow.innerHTML = `<button class="subject-pill" onclick="openSubjectDrawer('${esc(cId)}',null)" title="View class subjects">
+            <svg style="width:11px;height:11px;fill:currentColor;"><use href="#icon-book"></use></svg>
+            ${count} subject${count === 1 ? '' : 's'}
+        </button>`;
     });
 }
 

@@ -100,8 +100,8 @@ if ($channel === 'email') {
         $mail->isSMTP();
         $mail->Host       = 'smtp.gmail.com';
         $mail->SMTPAuth   = true;
-        $mail->Username   = 'helios.univv@gmail.com';
-        $mail->Password   = 'dthxdmkrcdrjfbna';
+        $mail->Username   = 'itsasecret';
+        $mail->Password   = 'mamamosecret';
         $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
         $mail->Port       = 587;
 
@@ -126,7 +126,7 @@ if ($channel === 'email') {
                     <tr>
                         <td style="padding:32px 36px;background:linear-gradient(135deg,#0d1c33 0%,#163356 100%);border-bottom:1px solid #2d4668;text-align:center;">
                             <div style="font-size:12px;letter-spacing:0.32em;text-transform:uppercase;color:#8ecfff;margin-bottom:10px;">Security Verification</div>
-                            <div style="font-size:32px;font-weight:700;line-height:1.1;color:#ffffff;">Ore<span style="color:#53d2ff;">Xis</span></div>
+                            <div style="font-size:32px;font-weight:700;line-height:1.1;color:#ffffff;">Hel<span style="color:#53d2ff;">ios</span></div>
                             <div style="margin-top:10px;font-size:15px;line-height:1.7;color:#c7d5ef;">Use the one-time password below to finish signing in to your account.</div>
                         </td>
                     </tr>
