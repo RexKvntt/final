@@ -56,7 +56,7 @@ if (!in_array($inputRole, ['student', 'faculty', 'admin'], true)) {
 }
 
 /* ── 3. FETCH USER FROM DATABASE ────────────────────────────
-   Matches on username (YY-XXXX permanent ID).
+   Matches on username (YYYY-XXXX permanent ID).
    Previously looped through users.json — now a single query.
 ────────────────────────────────────────────────────────── */
 $stmt = $pdo->prepare("

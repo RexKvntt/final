@@ -732,7 +732,7 @@ foreach ($allClasses as $c) {
                 </button>
                 <div>
                     <div class="page-date" id="currentDate"></div>
-                    <div class="page-date-sub">Platform Time</div>
+                    <div class="page-date-sub">Current Time</div>
                 </div>
             </div>
         </div>

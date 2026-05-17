@@ -658,7 +658,7 @@ $errorMessage = $authSystem->getErrorMessage($errorKey);
             </form>
 
             <div class="register-row">
-                Don't have login credentials? <a href="register.php">Request activation</a>
+                Don't have login credentials? <a href="register.php">Request here.</a>
             </div>
         </div>
     </div>
@@ -667,7 +667,7 @@ $errorMessage = $authSystem->getErrorMessage($errorKey);
 <div class="auth-footer">
     <span>English (US)</span>
     <div class="footer-links">
-        &copy; <?= date('Y') ?> Helios University Academic Platform
+        &copy; <?= date('Y') ?> Helios University Academic Hub
     </div>
 </div>
 
