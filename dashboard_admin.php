@@ -8,8 +8,9 @@ if (!isset($_SESSION['username']) || ($_SESSION['role'] ?? '') !== 'admin') {
     exit;
 }
 
-$username = htmlspecialchars($_SESSION['username']);
-$initials = strtoupper(substr($username, 0, 2));
+$usernameRaw = $_SESSION['username'];
+$username = htmlspecialchars($usernameRaw);
+$initials = strtoupper(substr($usernameRaw, 0, 2));
 
 require_once 'db.php';
 
@@ -21,13 +22,16 @@ $allUsers = $pdo->query("
      ORDER BY registered_at DESC
 ")->fetchAll();
 
-// Fetch classes with member count
+// Fetch classes with member, subject, and status summary counts
 $allClasses = $pdo->query("
-    SELECT c.id, c.name, c.subject, c.owner,
-           COUNT(cm.username) as member_count
+    SELECT c.id, c.name, c.subject, c.owner, c.status, c.created_at,
+           COUNT(DISTINCT cm.username) as member_count,
+           COUNT(DISTINCT s.id) as subject_count
       FROM classes c
       LEFT JOIN class_members cm ON cm.class_id = c.id
-     GROUP BY c.id
+      LEFT JOIN subjects s ON s.class_id = c.id
+     GROUP BY c.id, c.name, c.subject, c.owner, c.status, c.created_at
+     ORDER BY c.created_at DESC
 ")->fetchAll();
 
 // Fetch recent notifications
@@ -44,7 +48,7 @@ $totalStudents = count(array_filter($allUsers, fn($u) => $u['role'] === 'student
 $totalFaculty  = count(array_filter($allUsers, fn($u) => $u['role'] === 'faculty'));
 $pendingCount  = count(array_filter($allUsers, fn($u) => $u['status'] === 'pending'));
 $disabledCount = count(array_filter($allUsers, fn($u) => $u['status'] === 'disabled'));
-$activeClasses = count($allClasses);
+$activeClasses = count(array_filter($allClasses, fn($c) => ($c['status'] ?? '') === 'active'));
 $unreadNotifs  = count(array_filter($allNotifs, fn($n) => !$n['read']));
 
 $pendingUsers = array_filter($allUsers, fn($u) => $u['status'] === 'pending');
@@ -192,6 +196,7 @@ $displayName = $meRow['fullname'] ?? $usernameRaw;
         .status-chip.active { background: var(--accent-green-dim); color: var(--accent-green-hover); }
         .status-chip.pending { background: var(--accent-yellow-dim); color: #b37400; }
         .status-chip.disabled { background: var(--bg-base); color: var(--text-secondary); border: 1px solid var(--border-light); }
+        .status-chip.archived { background: var(--bg-base); color: var(--text-secondary); border: 1px solid var(--border-light); }
         
         .role-text { font-size: 13px; color: var(--text-primary); text-transform: capitalize; }
 
@@ -207,6 +212,8 @@ $displayName = $meRow['fullname'] ?? $usernameRaw;
         .list-content { flex: 1; }
         .list-title { font-size: 14px; font-weight: 500; color: var(--text-primary); }
         .list-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+        .class-summary-meta { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--text-secondary); }
+        .class-summary-count { font-weight: 500; white-space: nowrap; }
 
         .quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 16px; }
         .qa-card { display: flex; flex-direction: column; gap: 8px; padding: 16px; border: 1px solid var(--border-light); border-radius: 8px; transition: all var(--ease); }
@@ -407,9 +414,7 @@ $displayName = $meRow['fullname'] ?? $usernameRaw;
     background: var(--bg-base);
 }
 [data-theme="dark"] body {
-    background:
-        linear-gradient(90deg, rgba(3,12,25,.96), rgba(16,37,66,.9)),
-        linear-gradient(135deg, #07111f 0 22%, #10233d 22% 44%, #0b182a 44% 66%, #18365e 66% 100%);
+    background: var(--bg-base);
 }
         .topbar,
         .sidebar,
@@ -657,7 +662,9 @@ $displayName = $meRow['fullname'] ?? $usernameRaw;
                             $cName    = $cls['name']    ?? 'Untitled';
                             $cSubj    = $cls['subject'] ?? '';
                             $cOwner   = $cls['owner']   ?? '—';
-                            $cMembers = count($cls['members'] ?? []);
+                            $cMembers = (int)($cls['member_count'] ?? 0);
+                            $cSubjects = (int)($cls['subject_count'] ?? 0);
+                            $cStatus  = $cls['status'] ?? 'active';
                             $cLetter  = strtoupper(substr($cName, 0, 1));
                         ?>
                         <div class="list-item">
@@ -666,7 +673,11 @@ $displayName = $meRow['fullname'] ?? $usernameRaw;
                                 <div class="list-title"><?= htmlspecialchars($cName) ?></div>
                                 <div class="list-sub"><?= htmlspecialchars($cSubj) ?> · <?= htmlspecialchars($cOwner) ?></div>
                             </div>
-                            <div style="font-size:13px; font-weight:500; color:var(--text-secondary);"><?= $cMembers ?> Enrolled</div>
+                            <div class="class-summary-meta">
+                                <span class="status-chip <?= htmlspecialchars($cStatus) ?>"><?= htmlspecialchars($cStatus) ?></span>
+                                <span class="class-summary-count"><?= $cMembers ?> enrolled</span>
+                                <span class="class-summary-count"><?= $cSubjects ?> subject<?= $cSubjects === 1 ? '' : 's' ?></span>
+                            </div>
                         </div>
                         <?php endforeach; ?>
                     </div>

@@ -264,8 +264,8 @@ $totalClasses = (int)$totalClassesStmt->fetchColumn();
             margin-bottom: 24px;
             display: flex; align-items: center; gap: 10px;
         }
-        .alert-success { background: #f0fdf4; border: 1.5px solid #86efac; color: #15803d; }
-        .alert-error   { background: #fef2f2; border: 1.5px solid #fca5a5; color: #dc2626; }
+        .alert-success { background: #1d743c; border: 1.5px solid #86efac; color: #f0fdf4; }
+        .alert-error   { background: #cc3a3a; border: 1.5px solid #fca5a5; color: #fef2f2; }
 
         /* ── CARD ── */
         .card {
