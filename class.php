@@ -72,7 +72,27 @@ class SystemCore implements DatabaseDriverInterface {
                 $posts = $p->fetchAll();
 
                 foreach ($posts as &$post) {
-                    // Post file — columns: id, post_id, orig_name, stored_path, ext, size
+                    // Backfill display metadata for posts created before subject tracking.
+                    $postFaculty = $post['posted_by'] ?? '';
+                    $post['subject_data'] = null;
+                    foreach ($subjects as $subject) {
+                        if (!empty($post['subject']) && ($subject['id'] ?? '') === $post['subject']) {
+                            $post['subject_data'] = $subject;
+                            break;
+                        }
+                    }
+                    if (!$post['subject_data'] && !empty($postFaculty)) {
+                        $facultySubjects = array_values(array_filter(
+                            $subjects,
+                            fn($subject) => ($subject['faculty'] ?? '') === $postFaculty
+                        ));
+                        if (count($facultySubjects) === 1) {
+                            $post['subject_data'] = $facultySubjects[0];
+                            $post['subject'] = $facultySubjects[0]['id'] ?? null;
+                        }
+                    }
+
+                    // Post file: columns id, post_id, orig_name, stored_path, ext, size.
                     $pf = $pdo->prepare("SELECT * FROM post_files WHERE post_id = ?");
                     $pf->execute([$post['id']]);
                     $pfile = $pf->fetch();
@@ -232,7 +252,6 @@ class ClassroomManager {
         $this->fileHandler = new FileHandler();
         
         SystemCore::ensureDirectories();
-        
 $this->classesData = SystemCore::load('classes');
 $this->usersData   = SystemCore::load('users');
 
@@ -248,7 +267,7 @@ $this->resolveClassContext();
         foreach ($this->classesData['classes'] as &$cls) {
             if (isset($cls['id']) && $cls['id'] === $this->classId) {
                 if ($this->currentUserRole === 'faculty') {
-                    if (($cls['owner'] ?? '') === $this->currentUsername || $this->isFacultyAssignedToClass($cls)) {
+                    if ($this->isFacultyAssignedToClass($cls)) {
                         $this->currentClass = &$cls;
                         return;
                     }
@@ -286,6 +305,24 @@ $this->resolveClassContext();
         return false;
     }
 
+    private function resolveFacultySubject(?string $subjectId = null): ?array {
+        $assignedSubjects = array_values(array_filter(
+            $this->currentClass['subjects'] ?? [],
+            fn($subject) => ($subject['faculty'] ?? '') === $this->currentUsername
+        ));
+
+        if ($subjectId !== null && $subjectId !== '') {
+            foreach ($assignedSubjects as $subject) {
+                if (($subject['id'] ?? '') === $subjectId) {
+                    return $subject;
+                }
+            }
+            return null;
+        }
+
+        return $assignedSubjects[0] ?? null;
+    }
+
     private function executeCreatePost(array $data, array $files): void {
         global $pdo;
         $type     = Sanitizer::string($data['post_type'] ?? 'announcement');
@@ -293,10 +330,15 @@ $this->resolveClassContext();
         $body     = trim($data['body'] ?? '');
         $deadline = Sanitizer::date($data['deadline'] ?? null);
         $points   = Sanitizer::int($data['points'] ?? '100');
+        $subject  = $this->resolveFacultySubject(Sanitizer::string($data['subject_id'] ?? ''));
 
         $fileInfo = null;
         if (isset($files['post_file'])) {
             $fileInfo = $this->fileHandler->processUpload($files['post_file'], SystemCore::DIR_UPLOADS);
+        }
+
+        if ($this->currentUserRole === 'faculty' && !$subject) {
+            $this->redirect('stream', 'error_subject_required');
         }
 
         if (empty($title) && empty($body) && $fileInfo === null) {
@@ -309,10 +351,20 @@ $this->resolveClassContext();
         $points   = ($type === 'assignment' && $points > 0) ? $points : null;
 
         $stmt = $pdo->prepare(
-            "INSERT INTO posts (id, class_id, type, title, body, posted_by, deadline, points)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+            "INSERT INTO posts (id, class_id, type, title, body, posted_by, subject, deadline, points)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
         );
-        $stmt->execute([$postId, $this->classId, $type, $title, $body, $this->currentUsername, $deadline, $points]);
+        $stmt->execute([
+            $postId,
+            $this->classId,
+            $type,
+            $title,
+            $body,
+            $this->currentUsername,
+            $subject['id'] ?? null,
+            $deadline,
+            $points
+        ]);
 
         if ($fileInfo) {
             $pf = $pdo->prepare(
@@ -329,6 +381,10 @@ $this->resolveClassContext();
         global $pdo;
         $postId = Sanitizer::string($data['post_id'] ?? '');
         $note   = trim($data['note'] ?? '');
+
+        if (!$this->canStudentAccessPost($postId)) {
+            $this->redirect('grades', 'error_access_denied');
+        }
 
         $fileInfo = null;
         if (isset($files['submission_file'])) {
@@ -357,6 +413,9 @@ $this->resolveClassContext();
 
     private function executeUnsubmitAssignment(string $postId): void {
         global $pdo;
+        if (!$this->canStudentAccessPost($postId)) {
+            $this->redirect('grades', 'error_access_denied');
+        }
         // Get submission id first to delete files
         $stmt = $pdo->prepare("SELECT id FROM submissions WHERE post_id = ? AND student_username = ? AND score IS NULL");
         $stmt->execute([$postId, $this->currentUsername]);
@@ -368,9 +427,41 @@ $this->resolveClassContext();
         $this->redirect('grades', 'work_unsubmitted');
     }
 
+    private function canStudentAccessPost(string $postId): bool {
+        global $pdo;
+        if ($this->currentUserRole !== 'student' || $postId === '') {
+            return true;
+        }
+
+        $stmt = $pdo->prepare("SELECT subject FROM posts WHERE id = ? AND class_id = ?");
+        $stmt->execute([$postId, $this->classId]);
+        $subjectId = $stmt->fetchColumn();
+        if ($subjectId === false) {
+            return false;
+        }
+        if (empty($subjectId)) {
+            return in_array($this->currentUsername, $this->currentClass['members'] ?? [], true);
+        }
+
+        foreach ($this->currentClass['subjects'] ?? [] as $subject) {
+            if (($subject['id'] ?? '') === $subjectId) {
+                return in_array($this->currentUsername, $subject['students'] ?? [], true);
+            }
+        }
+
+        return false;
+    }
+
     private function executeDeletePost(string $postId): void {
         global $pdo;
         if (empty($postId)) return;
+        if ($this->currentUserRole === 'faculty') {
+            $ownerCheck = $pdo->prepare("SELECT id FROM posts WHERE id = ? AND class_id = ? AND posted_by = ?");
+            $ownerCheck->execute([$postId, $this->classId, $this->currentUsername]);
+            if (!$ownerCheck->fetchColumn()) {
+                $this->redirect('stream', 'error_delete_denied');
+            }
+        }
         $pdo->prepare("DELETE FROM submission_files WHERE submission_id IN (SELECT id FROM submissions WHERE post_id = ?)")->execute([$postId]);
         $pdo->prepare("DELETE FROM submissions WHERE post_id = ?")->execute([$postId]);
         $pdo->prepare("DELETE FROM comments WHERE post_id = ?")->execute([$postId]);
@@ -404,6 +495,14 @@ $this->resolveClassContext();
     private function executeScoreSubmission(string $postId, string $studentUser, string $score, string $note): void {
         global $pdo;
         if (empty($postId) || empty($studentUser)) return;
+
+        if ($this->currentUserRole === 'faculty') {
+            $ownerCheck = $pdo->prepare("SELECT id FROM posts WHERE id = ? AND class_id = ? AND posted_by = ?");
+            $ownerCheck->execute([$postId, $this->classId, $this->currentUsername]);
+            if (!$ownerCheck->fetchColumn()) {
+                $this->redirect('grades', 'error_score_denied');
+            }
+        }
 
         // Get points ceiling
         $ps = $pdo->prepare("SELECT points FROM posts WHERE id = ?");
@@ -660,19 +759,12 @@ $myDisplayName = $myProfile['display_name'] ?? $myProfile['fullname'] ?? $userna
 $myInitials    = strtoupper(substr($myDisplayName, 0, 1));
 $myAvatarUrl   = (!empty($myProfile['avatar']) && file_exists(__DIR__ . '/' . $myProfile['avatar'])) ? htmlspecialchars($myProfile['avatar'], ENT_QUOTES, 'UTF-8') : null;
 
-$facultyUsername = $currentClass['owner'] ?? '';
-$facultyProfile  = $usersDictionary[$facultyUsername] ?? [];
-$facultyName     = $facultyProfile['display_name'] ?? $facultyProfile['fullname'] ?? $facultyUsername;
-$facultyInitials = strtoupper(substr($facultyName, 0, 1));
-$facultyAvatarUrl= (!empty($facultyProfile['avatar']) && file_exists(__DIR__ . '/' . $facultyProfile['avatar'])) ? htmlspecialchars($facultyProfile['avatar'], ENT_QUOTES, 'UTF-8') : null;
 $accountSettingsHref = $role === 'faculty' ? 'role_faculty_profile.php' : 'role_student_profile.php';
 
 $allowedTabs = ($role === 'faculty') ? ['stream', 'people', 'grades'] : ['stream', 'grades'];
 $activeTab   = in_array($_GET['tab'] ?? '', $allowedTabs, true) ? $_GET['tab'] : 'stream';
 
 $enrolledMembers = $currentClass['members'] ?? [];
-$classPosts      = $currentClass['posts'] ?? [];
-$assignmentPosts = array_filter($classPosts, fn($p) => ($p['type'] ?? '') === 'assignment');
 $classSubjects   = $currentClass['subjects'] ?? [];
 $visibleClassSubjects = match($role) {
     'student' => array_values(array_filter(
@@ -685,6 +777,73 @@ $visibleClassSubjects = match($role) {
     )),
     default => $classSubjects,
 };
+if ($role === 'faculty') {
+    $facultySubjectMembers = [];
+    foreach ($visibleClassSubjects as $subject) {
+        foreach ($subject['students'] ?? [] as $studentUsername) {
+            $facultySubjectMembers[$studentUsername] = $studentUsername;
+        }
+    }
+    $enrolledMembers = array_values($facultySubjectMembers);
+}
+$visibleSubjectIds = array_map(fn($subject) => $subject['id'] ?? '', $visibleClassSubjects);
+$selectedSubjectId = Sanitizer::string($_GET['subject'] ?? '');
+if ($selectedSubjectId !== '' && !in_array($selectedSubjectId, $visibleSubjectIds, true)) {
+    $selectedSubjectId = '';
+}
+$subjectById = [];
+$assignedTeachers = [];
+foreach ($classSubjects as $subject) {
+    $subjectId = $subject['id'] ?? '';
+    if ($subjectId !== '') {
+        $subjectById[$subjectId] = $subject;
+    }
+    $subjectFaculty = $subject['faculty'] ?? '';
+    if ($subjectFaculty !== '') {
+        $assignedTeachers[$subjectFaculty]['subjects'][] = $subject;
+    }
+}
+foreach ($assignedTeachers as $teacherUsername => &$teacherInfo) {
+    $profile = $usersDictionary[$teacherUsername] ?? [];
+    $teacherInfo['name'] = $profile['display_name'] ?? $profile['fullname'] ?? $teacherUsername;
+    $teacherInfo['initials'] = strtoupper(substr($teacherInfo['name'], 0, 1));
+}
+unset($teacherInfo);
+$primaryTeacher = reset($assignedTeachers);
+$facultyName = is_array($primaryTeacher) ? ($primaryTeacher['name'] ?? 'Faculty') : 'Faculty';
+$facultyInitials = strtoupper(substr($facultyName, 0, 1));
+$facultyAvatarUrl = null;
+$getSubjectName = static function(array $post) use ($subjectById): string {
+    $subject = $post['subject_data'] ?? null;
+    if (!$subject && !empty($post['subject'])) {
+        $subject = $subjectById[$post['subject']] ?? null;
+    }
+    return $subject['name'] ?? 'Unassigned subject';
+};
+$getPostFacultyName = static function(array $post) use ($usersDictionary, $facultyName): string {
+    $facultyUser = $post['posted_by'] ?? '';
+    $profile = $usersDictionary[$facultyUser] ?? [];
+    return ($profile['display_name'] ?? $profile['fullname'] ?? $facultyUser) ?: $facultyName;
+};
+$allClassPosts = $currentClass['posts'] ?? [];
+$classPosts = array_values(array_filter($allClassPosts, function($post) use ($role, $username, $visibleSubjectIds, $selectedSubjectId) {
+    $postSubject = $post['subject'] ?? '';
+    $postFaculty = $post['posted_by'] ?? '';
+
+    if ($role === 'faculty' && $postFaculty !== $username) {
+        return false;
+    }
+    if ($role === 'student' && $postSubject !== '' && !in_array($postSubject, $visibleSubjectIds, true)) {
+        return false;
+    }
+    if ($selectedSubjectId !== '' && $postSubject !== $selectedSubjectId) {
+        return false;
+    }
+
+    return true;
+}));
+$assignmentPosts = array_values(array_filter($classPosts, fn($p) => ($p['type'] ?? '') === 'assignment'));
+$selectedSubject = $selectedSubjectId !== '' ? ($subjectById[$selectedSubjectId] ?? null) : null;
 $nowTs           = time();
 $dueTasksCount   = 0;
 $missingTasksCount = 0;
@@ -1754,7 +1913,9 @@ if ($activePostId) {
             box-shadow: 0 8px 28px rgba(37,48,67,.13);
             transition: transform 0.18s ease, box-shadow 0.18s ease;
             cursor: default;
+            text-decoration: none;
         }
+        a.ls-subject-card { cursor: pointer; }
         .ls-subject-card:hover {
             transform: translateY(-3px);
             box-shadow: 0 16px 40px rgba(37,48,67,.18);
@@ -2397,7 +2558,7 @@ if ($activePostId) {
             if (($subject['faculty'] ?? '') === $username) $facultyAssigned = true;
             if (in_array($username, $subject['students'] ?? [], true)) $studentSubjectEnrollment = true;
         }
-        if ($role === 'faculty' && (($sc['owner'] ?? '') === $username || $facultyAssigned)) $sidebarClasses[] = $sc;
+        if ($role === 'faculty' && $facultyAssigned) $sidebarClasses[] = $sc;
         elseif ($role === 'student' && (in_array($username, $sc['members'] ?? [], true) || $studentSubjectEnrollment)) $sidebarClasses[] = $sc;
     }
     foreach (array_slice($sidebarClasses, 0, 8) as $sc):
@@ -2438,13 +2599,15 @@ if ($activePostId) {
                          ? $activePost['submissions'][$username] : null;
             $isLate    = $isAssign && !empty($activePost['deadline']) && strtotime($activePost['deadline']) < time();
             $postTheme = ViewRenderer::getPostTheme($postType);
+            $activePostFacultyName = $getPostFacultyName($activePost);
+            $activePostSubjectName = $getSubjectName($activePost);
         ?>
         <div class="gc-detail-wrap">
 
             <!-- Back breadcrumb -->
             <a href="?id=<?= urlencode($classId) ?>#class-stream" class="gc-detail-back">
                 <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:currentColor;"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
-                Stream
+                Board
             </a>
 
             <div class="gc-detail-layout">
@@ -2458,7 +2621,7 @@ if ($activePostId) {
                         <div class="gc-detail-title-group">
                             <h1 class="gc-detail-title"><?= htmlspecialchars($activePost['title'] ?? 'Untitled') ?></h1>
                             <div class="gc-detail-meta">
-                                <?= htmlspecialchars($facultyName) ?> &bull; <?= date('M j', strtotime($activePost['posted_at'] ?? 'now')) ?>
+                                <?= htmlspecialchars($activePostFacultyName) ?> &bull; <?= htmlspecialchars($activePostSubjectName) ?> &bull; <?= date('M j', strtotime($activePost['posted_at'] ?? 'now')) ?>
                             </div>
                             <div class="gc-detail-points-row">
                                 <?php if ($isAssign): ?>
@@ -2633,7 +2796,7 @@ if ($activePostId) {
                             <span class="ls-due-icon"><svg><use href="#icon-assignment"></use></svg></span>
                             <span>
                                 <span class="ls-due-title"><?= htmlspecialchars($task['title'] ?? 'Untitled task') ?></span>
-                                <span class="ls-due-meta"><?= htmlspecialchars(date('M j, g:i A', strtotime($task['deadline']))) ?></span>
+                                <span class="ls-due-meta"><?= htmlspecialchars($getSubjectName($task)) ?> &bull; <?= htmlspecialchars(date('M j, g:i A', strtotime($task['deadline']))) ?></span>
                             </span>
                         </a>
                         <?php endforeach; ?>
@@ -2658,14 +2821,19 @@ if ($activePostId) {
                     <?php
                         $rawName   = $subject['name'] ?? 'Untitled subject';
                         $cleanName = trim(preg_replace('/\s*\(.*\)\s*$/', '', $rawName)) ?: $rawName;
+                        $subjectFacultyUser = $subject['faculty'] ?? '';
+                        $subjectFacultyProfile = $usersDictionary[$subjectFacultyUser] ?? [];
+                        $subjectFacultyName = ($subjectFacultyProfile['display_name'] ?? $subjectFacultyProfile['fullname'] ?? $subjectFacultyUser) ?: 'No faculty assigned';
+                        $subjectHref = '?id=' . urlencode($classId) . '&subject=' . urlencode($subject['id'] ?? '') . '#class-work';
                     ?>
-                    <article class="ls-subject-card">
+                    <<?= $role === 'student' ? 'a' : 'article' ?> class="ls-subject-card" <?= $role === 'student' ? 'href="' . htmlspecialchars($subjectHref, ENT_QUOTES, 'UTF-8') . '"' : '' ?>>
                         <div>
                             <div class="ls-subject-icon">
                                 <svg viewBox="0 0 24 24"><path d="M12 3L1 9l11 6 9-4.91V17h2V9L12 3zM5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82z"/></svg>
                             </div>
                             <div class="ls-subject-name"><?= htmlspecialchars($cleanName) ?></div>
                             <div class="ls-subject-meta"><?= count($subjectStudents) ?> enrolled students</div>
+                            <div class="ls-subject-meta">Faculty: <?= htmlspecialchars($subjectFacultyName) ?></div>
                         </div>
                         <div class="ls-subject-footer">
                             <span class="ls-subject-footer-label">Subject</span>
@@ -2674,7 +2842,7 @@ if ($activePostId) {
                                 <?= count($subjectStudents) ?>
                             </span>
                         </div>
-                    </article>
+                    </<?= $role === 'student' ? 'a' : 'article' ?>>
                     <?php endforeach; ?>
                 <?php endif; ?>
             </div>
@@ -2717,13 +2885,13 @@ if ($activePostId) {
                     $displayTasks = array_slice($upcomingTasks, 0, 3);
                     ?>
                     <?php if (empty($displayTasks)): ?>
-                        <p class="upcoming-empty-state">Woohoo, no work due soon!</p>
+                        <p class="upcoming-empty-state">No tasks detected. Rest easy!</p>
                     <?php else: ?>
                         <div class="upcoming-task-list">
                             <?php foreach ($displayTasks as $task): ?>
                                 <a class="upcoming-task-item" href="?id=<?= urlencode($classId) ?>&post=<?= urlencode($task['id']) ?>" style="display:flex;flex-direction:column;gap:2px;text-decoration:none;color:inherit;padding:6px 8px;border-radius:var(--gc-radius-sm);margin:-6px -8px;transition:background-color var(--transition-fast);" onmouseover="this.style.backgroundColor='var(--gc-bg-hover)'" onmouseout="this.style.backgroundColor=''">
                                     <span class="upcoming-task-title" title="<?= htmlspecialchars($task['title']) ?>"><?= htmlspecialchars($task['title']) ?></span>
-                                    <span class="upcoming-task-due">Due <?= date('l, g:i A', strtotime($task['deadline'])) ?></span>
+                                    <span class="upcoming-task-due"><?= htmlspecialchars($getSubjectName($task)) ?> &bull; Due <?= date('l, g:i A', strtotime($task['deadline'])) ?></span>
                                 </a>
                             <?php endforeach; ?>
                         </div>
@@ -2759,6 +2927,8 @@ if ($activePostId) {
                         $isAssign  = ($postType === 'assignment');
                         $mySub     = ($role === 'student' && $isAssign && isset($post['submissions'][$username])) ? $post['submissions'][$username] : null;
                         $postUrl   = '?id=' . urlencode($classId) . '&post=' . urlencode($post['id']);
+                        $postFacultyName = $getPostFacultyName($post);
+                        $postSubjectName = $getSubjectName($post);
                     ?>
                         <article class="feed-post-card stream-card-clickable" id="post-<?= htmlspecialchars($post['id']) ?>" onclick="window.location.href='<?= $postUrl ?>'" style="cursor:pointer;">
                             <div class="post-indicator" style="background-color:<?= $postTheme['color'] ?>;"></div>
@@ -2772,7 +2942,7 @@ if ($activePostId) {
                                             <?= htmlspecialchars($post['title'] ?? 'Untitled') ?>
                                         </h3>
                                         <span class="post-metadata-time">
-                                            <?= htmlspecialchars($postTheme['label']) ?> &bull; <?= htmlspecialchars($facultyName) ?> &bull; <?= ViewRenderer::formatRelativeTime($post['posted_at'] ?? '') ?>
+                                            <?= htmlspecialchars($postTheme['label']) ?> &bull; <?= htmlspecialchars($postSubjectName) ?> &bull; <?= htmlspecialchars($postFacultyName) ?> &bull; <?= ViewRenderer::formatRelativeTime($post['posted_at'] ?? '') ?>
                                             <?php if (!empty($post['deadline'])): ?>
                                                 &bull; Due <?= date('M j, g:i A', strtotime($post['deadline'])) ?>
                                             <?php endif; ?>
@@ -2829,15 +2999,29 @@ if ($activePostId) {
             <section class="roster-section">
                 <header class="roster-header">
                     <h2 class="roster-title">Teachers</h2>
+                    <span class="roster-count"><?= count($assignedTeachers) ?> <?= count($assignedTeachers) === 1 ? 'teacher' : 'teachers' ?></span>
                 </header>
-                <div class="person-item">
-                    <div class="person-info-group">
-                        <div class="person-avatar" style="background-color: var(--gc-blue); color: white;">
-                            <?= htmlspecialchars($facultyInitials) ?>
+                <?php if (empty($assignedTeachers)): ?>
+                    <p style="text-align: center; color: var(--gc-text-secondary); padding: 24px;">No faculty users are assigned to subjects in this class yet.</p>
+                <?php else: ?>
+                    <div class="roster-list">
+                        <?php foreach ($assignedTeachers as $teacher): ?>
+                        <div class="person-item">
+                            <div class="person-info-group">
+                                <div class="person-avatar" style="background-color: var(--gc-blue); color: white;">
+                                    <?= htmlspecialchars($teacher['initials']) ?>
+                                </div>
+                                <div>
+                                    <span class="person-name"><?= htmlspecialchars($teacher['name']) ?></span>
+                                    <div style="font-size:12px;color:var(--gc-text-secondary);margin-top:2px;">
+                                        <?= htmlspecialchars(implode(', ', array_map(fn($subject) => $subject['name'] ?? 'Untitled subject', $teacher['subjects'] ?? []))) ?>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <span class="person-name"><?= htmlspecialchars($facultyName) ?></span>
+                        <?php endforeach; ?>
                     </div>
-                </div>
+                <?php endif; ?>
             </section>
 
             <section class="roster-section">
@@ -2989,6 +3173,12 @@ if ($activePostId) {
         <?php else: // Student Classwork View ?>
             
             <div class="layout-work" id="class-work">
+                <?php if ($selectedSubject): ?>
+                    <div style="margin-bottom:20px;">
+                        <h2 style="font-size:20px;color:var(--gc-text-primary);margin-bottom:4px;"><?= htmlspecialchars($selectedSubject['name'] ?? 'Subject tasks') ?></h2>
+                        <p style="font-size:13px;color:var(--gc-text-secondary);">Tasks assigned for this subject.</p>
+                    </div>
+                <?php endif; ?>
                 <?php 
                 $workGroups = ['Assigned' => [], 'Turned in' => [], 'Returned' => [], 'Missing' => []];
                 $currentTime = time();
@@ -3032,7 +3222,7 @@ if ($activePostId) {
                                     <div class="cw-row-main">
                                         <div class="cw-row-title"><?= htmlspecialchars($a['title'] ?? 'Untitled') ?></div>
                                         <div class="cw-row-meta">
-                                            <?= htmlspecialchars($facultyName) ?>
+                                            <?= htmlspecialchars($getSubjectName($a)) ?> &bull; <?= htmlspecialchars($getPostFacultyName($a)) ?>
                                             <?php if ($deadline): ?>
                                                 &bull; Due <?= date('M j, g:i A', $deadline) ?>
                                             <?php endif; ?>
@@ -3093,6 +3283,15 @@ if ($activePostId) {
                         </button>
                     </div>
                     
+                    <div class="static-input-wrap" style="margin-bottom:16px;">
+                        <label class="static-input-label">Subject</label>
+                        <select class="static-input-field" name="subject_id" required>
+                            <?php foreach ($visibleClassSubjects as $subject): ?>
+                                <option value="<?= htmlspecialchars($subject['id'] ?? '') ?>"><?= htmlspecialchars($subject['name'] ?? 'Untitled subject') ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
                     <div class="md-input-container">
                         <input type="text" class="md-input-field" name="title" id="inputPostTitle" placeholder=" ">
                         <label class="md-input-label" for="inputPostTitle">Title</label>
@@ -3282,7 +3481,7 @@ if ($activePostId) {
     const CLASS_CONTEXT = { 
         id: <?= json_encode($classId) ?>, 
         users: <?= json_encode($usersDictionary) ?>, 
-        posts: <?= json_encode($currentClass['posts'] ?? []) ?>, 
+        posts: <?= json_encode($classPosts) ?>,
         members: <?= json_encode($enrolledMembers) ?> 
     };
     <?php endif; ?>

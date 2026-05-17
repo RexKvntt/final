@@ -39,13 +39,6 @@ function adminNextSubjectId(PDO $pdo): string {
     return 'S001';
 }
 
-function adminNextClassCode(PDO $pdo): string {
-    $stmt = $pdo->query("SELECT code FROM classes ORDER BY created_at DESC LIMIT 1");
-    $last = $stmt->fetchColumn();
-    // generate a random 6-char alphanumeric code
-    return strtoupper(substr(md5(uniqid()), 0, 6));
-}
-
 /* ═══════════════════════════════════════════════
    POST ACTIONS
 ════════════════════════════════════════════════ */
@@ -66,11 +59,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['admin_class_action'])
                     break;
                 }
                 $newId   = adminNextClassId($pdo);
-                $newCode = adminNextClassCode($pdo);
                 $stmt = $pdo->prepare(
-                    "INSERT INTO classes (id, name, subject, owner, status, code) VALUES (?,?,?,?,?,?)"
+                    "INSERT INTO classes (id, name, subject, status) VALUES (?,?,?,?)"
                 );
-                $stmt->execute([$newId, $name, '', $_SESSION['username'], $status, $newCode]);
+                $stmt->execute([$newId, $name, '', $status]);
             }
             adminRedirectClasses('class_created');
             break;
@@ -219,7 +211,7 @@ $unreadNotifs = (int)$pdo->query(
 
 // Classes
 $allClasses = $pdo->query(
-    "SELECT id, name, subject, description, code, owner, status FROM classes ORDER BY created_at DESC"
+    "SELECT id, name, subject, description, status FROM classes ORDER BY created_at DESC"
 )->fetchAll(PDO::FETCH_ASSOC);
 
 // Subjects keyed by class_id
@@ -271,7 +263,6 @@ foreach ($allClasses as $c) {
         'id'      => $cId,
         'name'    => $c['name'],
         'subject' => $c['subject'],
-        'owner'   => $c['owner'] ?? '',
         'members' => array_values(array_unique(array_column(
             $pdo->query("SELECT username FROM class_members WHERE class_id = " . $pdo->quote($cId))->fetchAll(PDO::FETCH_ASSOC),
             'username'
@@ -773,7 +764,7 @@ foreach ($allClasses as $c) {
         <div class="toolbar">
             <div class="search-wrap">
                 <svg class="search-icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
-                <input type="text" class="search-input" id="classSearch" placeholder="Search by class name, subject, or owner…">
+                <input type="text" class="search-input" id="classSearch" placeholder="Search by class name or subject…">
             </div>
             <select class="filter-select" id="statusFilter">
                 <option value="">All Status</option>
@@ -798,8 +789,6 @@ foreach ($allClasses as $c) {
             $cId        = $class['id'];
             $cName      = $class['name'];
             $cSubject   = $class['subject'];
-            $cOwner     = $class['owner'] ?? '';
-            $cOwnerName = $nameMap[$cOwner] ?? $cOwner;
             $cMemberCnt = $memberCountByClass[$cId] ?? 0;
             $cStatus    = $class['status'];
             $cSubjects  = $subjectsByClass[$cId] ?? [];
@@ -810,7 +799,6 @@ foreach ($allClasses as $c) {
         <div class="class-accordion"
              data-name="<?= htmlspecialchars(strtolower($cName)) ?>"
              data-subject="<?= htmlspecialchars(strtolower($cSubject)) ?>"
-             data-owner="<?= htmlspecialchars(strtolower($cOwner . ' ' . $cOwnerName)) ?>"
              data-status="<?= htmlspecialchars($cStatus) ?>">
 
             <div class="class-accordion-header" onclick="toggleAccordion(this)">
@@ -1168,7 +1156,7 @@ function applyFilters() {
     const status = statusFilter.value;
     let visible  = 0;
     document.querySelectorAll('.class-accordion').forEach(acc => {
-        const matchQ      = !q      || acc.dataset.name.includes(q) || acc.dataset.subject.includes(q) || acc.dataset.owner.includes(q);
+        const matchQ      = !q      || acc.dataset.name.includes(q) || acc.dataset.subject.includes(q);
         const matchStatus = !status || acc.dataset.status === status;
         const show = matchQ && matchStatus;
         acc.style.display = show ? '' : 'none';

@@ -605,7 +605,7 @@ $errorMessage = $authSystem->getErrorMessage($errorKey);
             <form action="process_login.php" method="POST" id="loginForm" novalidate>
 
                 <div class="field">
-                    <label for="username">Unique ID / Admin Username</label>
+                    <label for="username">Account ID</label>
                     <input type="text" id="username" name="username"
                            class="<?= in_array($errorKey, ['not_found','empty_fields']) ? 'field-error' : '' ?>"
                            autocomplete="username" spellcheck="false"
@@ -613,7 +613,7 @@ $errorMessage = $authSystem->getErrorMessage($errorKey);
                     <?php if ($errorKey === 'not_found'): ?>
                         <div class="field-hint visible">Couldn't find your <?= $orgName ?> account.</div>
                     <?php elseif ($errorKey === 'empty_fields' && empty($_GET['user'])): ?>
-                        <div class="field-hint visible">Please enter your Unique ID.</div>
+                        <div class="field-hint visible">Please enter your Account ID.</div>
                     <?php endif; ?>
                 </div>
 

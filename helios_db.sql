@@ -88,8 +88,6 @@ CREATE TABLE `classes` (
   `name` varchar(200) NOT NULL,
   `subject` varchar(200) NOT NULL,
   `description` text DEFAULT NULL,
-  `code` char(6) NOT NULL COMMENT '6-char alphanumeric join code',
-  `owner` varchar(10) NOT NULL COMMENT 'Faculty YY-XXXX username',
   `status` enum('active','archived') NOT NULL DEFAULT 'active',
   `created_at` datetime NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -98,10 +96,10 @@ CREATE TABLE `classes` (
 -- Dumping data for table `classes`
 --
 
-INSERT INTO `classes` (`id`, `name`, `subject`, `description`, `code`, `owner`, `status`, `created_at`) VALUES
-('C002', 'CLASS1B', 'PHYSICS', NULL, '83C559', '2026-0003', 'active', '2026-05-10 23:12:46'),
-('C003', '2b', '', NULL, '85F91B', '2026-0004', 'active', '2026-05-13 16:12:56'),
-('C004', 'Sect 2C', '', NULL, '3973F6', '2026-0004', 'active', '2026-05-16 15:24:06');
+INSERT INTO `classes` (`id`, `name`, `subject`, `description`, `status`, `created_at`) VALUES
+('C002', 'CLASS1B', 'PHYSICS', NULL, 'active', '2026-05-10 23:12:46'),
+('C003', '2b', '', NULL, 'active', '2026-05-13 16:12:56'),
+('C004', 'Sect 2C', '', NULL, 'active', '2026-05-16 15:24:06');
 
 -- --------------------------------------------------------
 
@@ -187,6 +185,7 @@ CREATE TABLE `posts` (
   `body` text DEFAULT NULL,
   `link_url` varchar(2048) DEFAULT NULL,
   `posted_by` varchar(10) NOT NULL,
+  `subject` varchar(20) DEFAULT NULL,
   `posted_at` datetime NOT NULL DEFAULT current_timestamp(),
   `deadline` datetime DEFAULT NULL,
   `points` int(10) UNSIGNED DEFAULT NULL
@@ -196,9 +195,9 @@ CREATE TABLE `posts` (
 -- Dumping data for table `posts`
 --
 
-INSERT INTO `posts` (`id`, `class_id`, `type`, `title`, `body`, `link_url`, `posted_by`, `posted_at`, `deadline`, `points`) VALUES
-('post_6a013a1532fb9', 'C002', 'assignment', 'Pag ubra bata', 'yes ubra kamo bata now a', NULL, '2026-0003', '2026-05-11 10:08:21', '2026-05-12 23:59:00', 100),
-('post_6a0433ff16140', 'C003', 'assignment', 'wowow', 'jhuuhuhh', NULL, '2026-0003', '2026-05-13 16:19:11', '2026-05-13 03:33:00', 100);
+INSERT INTO `posts` (`id`, `class_id`, `type`, `title`, `body`, `link_url`, `posted_by`, `subject`, `posted_at`, `deadline`, `points`) VALUES
+('post_6a013a1532fb9', 'C002', 'assignment', 'Pag ubra bata', 'yes ubra kamo bata now a', NULL, '2026-0003', 'S002', '2026-05-11 10:08:21', '2026-05-12 23:59:00', 100),
+('post_6a0433ff16140', 'C003', 'assignment', 'wowow', 'jhuuhuhh', NULL, '2026-0003', 'S004', '2026-05-13 16:19:11', '2026-05-13 03:33:00', 100);
 
 -- --------------------------------------------------------
 
@@ -416,9 +415,7 @@ ALTER TABLE `calendar_events`
 -- Indexes for table `classes`
 --
 ALTER TABLE `classes`
-  ADD PRIMARY KEY (`id`),
-  ADD UNIQUE KEY `code` (`code`),
-  ADD KEY `owner` (`owner`);
+  ADD PRIMARY KEY (`id`);
 
 --
 -- Indexes for table `class_members`
@@ -448,6 +445,7 @@ ALTER TABLE `notifications`
 ALTER TABLE `posts`
   ADD PRIMARY KEY (`id`),
   ADD KEY `posted_by` (`posted_by`),
+  ADD KEY `idx_posts_subject` (`subject`),
   ADD KEY `idx_posts_class` (`class_id`),
   ADD KEY `idx_posts_type` (`type`);
 
@@ -551,12 +549,6 @@ ALTER TABLE `calendar_events`
   ADD CONSTRAINT `calendar_events_ibfk_1` FOREIGN KEY (`created_by`) REFERENCES `users` (`username`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
--- Constraints for table `classes`
---
-ALTER TABLE `classes`
-  ADD CONSTRAINT `classes_ibfk_1` FOREIGN KEY (`owner`) REFERENCES `users` (`username`) ON DELETE CASCADE ON UPDATE CASCADE;
-
---
 -- Constraints for table `class_members`
 --
 ALTER TABLE `class_members`
@@ -575,7 +567,8 @@ ALTER TABLE `comments`
 --
 ALTER TABLE `posts`
   ADD CONSTRAINT `posts_ibfk_1` FOREIGN KEY (`class_id`) REFERENCES `classes` (`id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `posts_ibfk_2` FOREIGN KEY (`posted_by`) REFERENCES `users` (`username`) ON DELETE CASCADE ON UPDATE CASCADE;
+  ADD CONSTRAINT `posts_ibfk_2` FOREIGN KEY (`posted_by`) REFERENCES `users` (`username`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `posts_ibfk_3` FOREIGN KEY (`subject`) REFERENCES `subjects` (`id`) ON DELETE SET NULL;
 
 --
 -- Constraints for table `post_files`

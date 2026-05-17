@@ -70,13 +70,17 @@ foreach ($myClasses as &$cls) {
     $cls['members'] = array_column($stmtM->fetchAll(), 'username');
 
     // Get assignment posts (for "Due soon" / "To-do" on the dashboard card)
-    $stmtP = $pdo->prepare(
-        "SELECT id, title, type, deadline
-         FROM posts
-         WHERE class_id = ? AND type = 'assignment'
-         ORDER BY deadline ASC"
-    );
-    $stmtP->execute([$cls['id']]);
+    $postSql = "SELECT id, title, type, deadline, posted_by, subject
+                  FROM posts
+                 WHERE class_id = ? AND type = 'assignment'";
+    $postParams = [$cls['id']];
+    if ($role === 'faculty') {
+        $postSql .= " AND posted_by = ?";
+        $postParams[] = $usernameRaw;
+    }
+    $postSql .= " ORDER BY deadline IS NULL ASC, deadline ASC, posted_at DESC";
+    $stmtP = $pdo->prepare($postSql);
+    $stmtP->execute($postParams);
     $assignPosts = $stmtP->fetchAll();
 
     // Attach submissions to each post (keyed by student_username)
@@ -1712,8 +1716,11 @@ $subjectCounterSeed  = 0;
                                     $upcomingTasks[] = ['id'=>$post['id'],'title'=>$post['title'] ?? 'Untitled','due'=>date('D, M j',$deadline)];
                                 }
                             } else {
-                                $pc = count(array_filter($post['submissions'] ?? [], fn($s) => !isset($s['score']) || $s['score'] === ''));
-                                if ($pc > 0) $upcomingTasks[] = ['id'=>$post['id'],'title'=>$post['title'] ?? 'Untitled','due'=>$pc.' ungraded submission'.($pc>1?'s':'')];
+                                $ungraded = count(array_filter($post['submissions'] ?? [], fn($s) => !isset($s['score']) || $s['score'] === ''));
+                                $dueText = $ungraded > 0
+                                    ? $ungraded . ' ungraded submission' . ($ungraded > 1 ? 's' : '')
+                                    : (!empty($post['deadline']) ? 'Due ' . date('D, M j', strtotime($post['deadline'])) : 'Active task');
+                                $upcomingTasks[] = ['id'=>$post['id'],'title'=>$post['title'] ?? 'Untitled','due'=>$dueText];
                             }
                             if (count($upcomingTasks) >= 2) break;
                         }
@@ -1768,7 +1775,7 @@ $subjectCounterSeed  = 0;
                             <?php endforeach; ?>
                         </div>
                         <?php else: ?>
-                        <div class="gc-empty-tasks">Woohoo, no work due soon!</div>
+                        <div class="gc-empty-tasks">No tasks detected. Rest easy!</div>
                         <?php endif; ?>
                     </div>
 

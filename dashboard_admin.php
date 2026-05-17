@@ -15,22 +15,25 @@ $initials = strtoupper(substr($usernameRaw, 0, 2));
 require_once 'db.php';
 
 // Fetch all users from DB
+
 $allUsers = $pdo->query("
     SELECT username, fullname, role, status,
            DATE(activated_at) as joined
       FROM users
+     WHERE role != 'admin'
      ORDER BY registered_at DESC
 ")->fetchAll();
 
+
 // Fetch classes with member, subject, and status summary counts
 $allClasses = $pdo->query("
-    SELECT c.id, c.name, c.subject, c.owner, c.status, c.created_at,
+    SELECT c.id, c.name, c.subject, c.status, c.created_at,
            COUNT(DISTINCT cm.username) as member_count,
            COUNT(DISTINCT s.id) as subject_count
       FROM classes c
       LEFT JOIN class_members cm ON cm.class_id = c.id
       LEFT JOIN subjects s ON s.class_id = c.id
-     GROUP BY c.id, c.name, c.subject, c.owner, c.status, c.created_at
+     GROUP BY c.id, c.name, c.subject, c.status, c.created_at
      ORDER BY c.created_at DESC
 ")->fetchAll();
 
@@ -661,7 +664,6 @@ $displayName = $meRow['fullname'] ?? $usernameRaw;
                         <?php foreach(array_slice($allClasses, 0, 4) as $cls):
                             $cName    = $cls['name']    ?? 'Untitled';
                             $cSubj    = $cls['subject'] ?? '';
-                            $cOwner   = $cls['owner']   ?? '—';
                             $cMembers = (int)($cls['member_count'] ?? 0);
                             $cSubjects = (int)($cls['subject_count'] ?? 0);
                             $cStatus  = $cls['status'] ?? 'active';
@@ -671,7 +673,7 @@ $displayName = $meRow['fullname'] ?? $usernameRaw;
                             <div class="list-icon"><?= $cLetter ?></div>
                             <div class="list-content">
                                 <div class="list-title"><?= htmlspecialchars($cName) ?></div>
-                                <div class="list-sub"><?= htmlspecialchars($cSubj) ?> · <?= htmlspecialchars($cOwner) ?></div>
+                                <div class="list-sub"><?= htmlspecialchars($cSubj) ?></div>
                             </div>
                             <div class="class-summary-meta">
                                 <span class="status-chip <?= htmlspecialchars($cStatus) ?>"><?= htmlspecialchars($cStatus) ?></span>
