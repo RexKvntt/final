@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: May 16, 2026 at 10:08 AM
+-- Generation Time: May 17, 2026 at 04:54 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -70,13 +70,6 @@ CREATE TABLE `calendar_events` (
   `class_id` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
---
--- Dumping data for table `calendar_events`
---
-
-INSERT INTO `calendar_events` (`id`, `title`, `description`, `event_date`, `start_time`, `end_time`, `created_by`, `created_at`, `class_id`) VALUES
-(1, 'Final Presentation', 'Test', '2026-05-11', '11:00:00', '13:00:00', '2026-0003', '2026-05-11 11:31:48', 0);
-
 -- --------------------------------------------------------
 
 --
@@ -97,9 +90,10 @@ CREATE TABLE `classes` (
 --
 
 INSERT INTO `classes` (`id`, `name`, `subject`, `description`, `status`, `created_at`) VALUES
-('C002', 'CLASS1B', 'PHYSICS', NULL, 'active', '2026-05-10 23:12:46'),
+('C002', 'CLASS1B', 'PHYSICS', NULL, 'archived', '2026-05-10 23:12:46'),
 ('C003', '2b', '', NULL, 'active', '2026-05-13 16:12:56'),
-('C004', 'Sect 2C', '', NULL, 'active', '2026-05-16 15:24:06');
+('C004', 'Sect 2C', '', NULL, 'active', '2026-05-16 15:24:06'),
+('C005', 'Class-1A', '', NULL, 'active', '2026-05-17 18:59:27');
 
 -- --------------------------------------------------------
 
@@ -127,7 +121,10 @@ INSERT INTO `class_members` (`class_id`, `username`, `joined_at`) VALUES
 ('C004', '2026-0000', '2026-05-16 15:28:32'),
 ('C004', '2026-0001', '2026-05-16 15:28:26'),
 ('C004', '2026-0002', '2026-05-16 15:28:38'),
-('C004', '2026-0005', '2026-05-16 15:28:19');
+('C004', '2026-0005', '2026-05-16 15:28:19'),
+('C005', '2026-0000', '2026-05-17 19:00:55'),
+('C005', '2026-0001', '2026-05-17 19:00:47'),
+('C005', '2026-0005', '2026-05-17 19:00:36');
 
 -- --------------------------------------------------------
 
@@ -197,7 +194,9 @@ CREATE TABLE `posts` (
 
 INSERT INTO `posts` (`id`, `class_id`, `type`, `title`, `body`, `link_url`, `posted_by`, `subject`, `posted_at`, `deadline`, `points`) VALUES
 ('post_6a013a1532fb9', 'C002', 'assignment', 'Pag ubra bata', 'yes ubra kamo bata now a', NULL, '2026-0003', 'S002', '2026-05-11 10:08:21', '2026-05-12 23:59:00', 100),
-('post_6a0433ff16140', 'C003', 'assignment', 'wowow', 'jhuuhuhh', NULL, '2026-0003', 'S004', '2026-05-13 16:19:11', '2026-05-13 03:33:00', 100);
+('post_6a0433ff16140', 'C003', 'assignment', 'wowow', 'jhuuhuhh', NULL, '2026-0003', 'S004', '2026-05-13 16:19:11', '2026-05-13 03:33:00', 100),
+('post_6a0984f44498d', 'C004', 'assignment', 'Finals Presentation', 'Final defense for your system. Attached is a sample of your documentation.', NULL, '2026-0006', 'S006', '2026-05-17 17:05:56', '2026-05-18 11:00:00', 100),
+('post_6a09b305ed6c0', 'C005', 'material', 'Study this scheisse', 'Yeah just do what i say, if not then that\'s your choice.', NULL, '2026-0006', 'S008', '2026-05-17 20:22:29', NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -213,6 +212,14 @@ CREATE TABLE `post_files` (
   `ext` varchar(10) NOT NULL,
   `size` int(10) UNSIGNED NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `post_files`
+--
+
+INSERT INTO `post_files` (`id`, `post_id`, `orig_name`, `stored_path`, `ext`, `size`) VALUES
+(1, 'post_6a0984f44498d', 'Documentation-updated-but-not-final-gyapon.docx', 'uploads/class_posts/up_6a0984f44420f_Documentation-updated-but-not-final-gyapon.docx', 'docx', 4465222),
+(2, 'post_6a09b305ed6c0', 'Research_Platform_Technologies.pdf', 'uploads/class_posts/up_6a09b305eb414_Research_Platform_Technologies.pdf', 'pdf', 490181);
 
 -- --------------------------------------------------------
 
@@ -238,7 +245,9 @@ INSERT INTO `subjects` (`id`, `class_id`, `name`, `faculty`, `created_at`) VALUE
 ('S004', 'C003', 'History', '2026-0003', '2026-05-13 16:13:27'),
 ('S005', 'C004', 'Life of Caesar', '2026-0003', '2026-05-16 15:24:36'),
 ('S006', 'C004', 'The Capitalist Society', '2026-0006', '2026-05-16 15:28:07'),
-('S007', 'C003', 'Readings in Philippine History', '2026-0006', '2026-05-16 15:29:03');
+('S007', 'C003', 'Readings in Philippine History', '2026-0006', '2026-05-16 15:29:03'),
+('S008', 'C005', 'Information Management', '2026-0006', '2026-05-17 19:00:03'),
+('S009', 'C005', 'Integrative Programming', '2026-0003', '2026-05-17 19:00:25');
 
 -- --------------------------------------------------------
 
@@ -269,7 +278,13 @@ INSERT INTO `subject_members` (`subject_id`, `username`, `joined_at`) VALUES
 ('S006', '2026-0005', '2026-05-16 15:29:25'),
 ('S007', '2026-0001', '2026-05-16 15:29:48'),
 ('S007', '2026-0002', '2026-05-16 15:29:10'),
-('S007', '2026-0005', '2026-05-16 15:29:36');
+('S007', '2026-0005', '2026-05-16 15:29:36'),
+('S008', '2026-0000', '2026-05-17 19:00:55'),
+('S008', '2026-0001', '2026-05-17 19:00:47'),
+('S008', '2026-0005', '2026-05-17 19:00:36'),
+('S009', '2026-0000', '2026-05-17 19:01:22'),
+('S009', '2026-0001', '2026-05-17 19:01:11'),
+('S009', '2026-0005', '2026-05-17 19:01:04');
 
 -- --------------------------------------------------------
 
@@ -322,10 +337,11 @@ CREATE TABLE `system_settings` (
 INSERT INTO `system_settings` (`setting_key`, `setting_value`) VALUES
 ('allow_reg', '1'),
 ('enforce_otp', '0'),
-('last_updated', '2026-05-11 16:49:38'),
+('last_updated', '2026-05-17 16:46:46'),
 ('maintenance', '0'),
 ('m_duration', '1'),
-('m_work', 'hatdog'),
+('m_started_at', '1779029132'),
+('m_work', 'Thou shan\'t proceedeth no furthere, for a minore mishap has permeatedeth this mighty contraptioneth!'),
 ('org_name', 'Helios University'),
 ('sys_email', 'helios.univv@gmail.com');
 
@@ -445,9 +461,9 @@ ALTER TABLE `notifications`
 ALTER TABLE `posts`
   ADD PRIMARY KEY (`id`),
   ADD KEY `posted_by` (`posted_by`),
-  ADD KEY `idx_posts_subject` (`subject`),
   ADD KEY `idx_posts_class` (`class_id`),
-  ADD KEY `idx_posts_type` (`type`);
+  ADD KEY `idx_posts_type` (`type`),
+  ADD KEY `idx_posts_subject` (`subject`);
 
 --
 -- Indexes for table `post_files`
@@ -518,7 +534,7 @@ ALTER TABLE `calendar_events`
 -- AUTO_INCREMENT for table `post_files`
 --
 ALTER TABLE `post_files`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `submissions`
@@ -567,8 +583,7 @@ ALTER TABLE `comments`
 --
 ALTER TABLE `posts`
   ADD CONSTRAINT `posts_ibfk_1` FOREIGN KEY (`class_id`) REFERENCES `classes` (`id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `posts_ibfk_2` FOREIGN KEY (`posted_by`) REFERENCES `users` (`username`) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `posts_ibfk_3` FOREIGN KEY (`subject`) REFERENCES `subjects` (`id`) ON DELETE SET NULL;
+  ADD CONSTRAINT `posts_ibfk_2` FOREIGN KEY (`posted_by`) REFERENCES `users` (`username`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
 -- Constraints for table `post_files`
