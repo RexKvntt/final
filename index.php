@@ -644,7 +644,7 @@
                 <p class="eyebrow">Academic task monitoring</p>
                 <h1 class="hero-title">Manage classes, assignments, and progress in one place.</h1>
                 <p class="hero-sub">
-                    The Helios University Task Manager gives students and faculty an efficient way to track coursework and class activity with secure account access.
+                    The Helios University Academic Hub gives students and faculty an efficient way to track coursework and class activity with secure account access.
                 </p>
                 <div class="hero-cta">
                     <a href="register.php" class="btn btn-primary">
@@ -667,7 +667,7 @@
     <section class="intro reveal" id="about">
         <h2 class="section-title">Welcome To Helios University</h2>
         <p>
-            The Helios Administration humbly presents a seamless way to manage and track courseworks whether you are a student or a faculty member. Our platform is designed to provide a comprehensive overview of all your academic activities, from assignments and notifications to class progress.
+            The Helios Administration humbly presents a seamless system to manage and track courseworks whether you are a student or a faculty member. Our platform is designed to provide a comprehensive overview of all your academic activities, from assignments and reminders to class progress.
         </p>
     </section>
 
@@ -675,7 +675,7 @@
         <article class="pillar reveal">
             <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9"/><path d="M3 3v6h6"/><path d="M3 9a9 9 0 0 1 9-6"/></svg>
             <h2>Track Work</h2>
-            <p>Keep assignments, submissions, notifications, and class activity easy to follow.</p>
+            <p>Keep assignments, submissions, reminders, and class activity easy to follow.</p>
         </article>
         <article class="pillar reveal">
             <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>
@@ -691,7 +691,7 @@
 
     <section class="services reveal" id="features">
         <h2 class="section-title" style="text-align: center;">System Features</h2>
-        <p>Core workflows are grouped into quick scanning blocks, inspired by the reference layout but tailored to this academic system.</p>
+        <p>Listed below are the system features of the Helios University Academic Hub, designed to enhance your academic experience.</p>
         <div class="service-grid">
             <div class="service reveal"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 22h8M12 18v4"/></svg>Class Dashboard</div>
             <div class="service reveal"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>Assignments</div>
@@ -710,7 +710,7 @@
     </section>
 
     <footer class="footer">
-        &copy; <?= date('Y') ?> Helios University Academic Platform
+        &copy; <?= date('Y') ?> Helios University Academic Hub. All rights reserved.
     </footer>
 </main>
 

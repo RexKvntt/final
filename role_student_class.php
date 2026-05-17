@@ -919,7 +919,7 @@ foreach ($cls['posts'] ?? [] as $p) {
 <div class="modal-overlay" id="leaveModal">
     <div class="leave-modal">
         <h3>Leave this class?</h3>
-        <p>You'll lose access to all posts, materials, and grades in <strong><?= htmlspecialchars($cls['name']) ?></strong>. You can rejoin later with the class code.</p>
+        <p>You'll lose access to all posts, materials, and grades in <strong><?= htmlspecialchars($cls['name']) ?></strong>.</p>
         <div class="modal-footer">
             <button class="btn-cancel" onclick="closeLeaveModal()">Cancel</button>
             <form method="POST" action="process_class.php" style="margin:0;">
